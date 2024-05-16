@@ -49,7 +49,7 @@ def k_means_cpu(weight, n_clusters, init='k-means++', max_iter=50):
     if n_clusters > weight.size:
         n_clusters = weight.size
 
-    k_means = KMeans(n_clusters=n_clusters, init=init, n_init=1, max_iter=max_iter, n_jobs=20)
+    k_means = KMeans(n_clusters=n_clusters, init=init, n_init=1, max_iter=max_iter)
     k_means.fit(weight)
 
     centroids = k_means.cluster_centers_
