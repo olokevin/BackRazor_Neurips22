@@ -29,16 +29,19 @@ from ofa.utils import (
 )
 from ofa.utils import MyRandomResizedCrop
 
+from ZO_Estim.ZO_Estim_entry import build_obj_fn
+
 __all__ = ["RunManager"]
 
 
 class RunManager:
     def __init__(
-        self, path, net, run_config, init=True, measure_latency=None, no_gpu=False
+        self, path, net, run_config, ZO_Estim=None, init=True, measure_latency=None, no_gpu=False
     ):
         self.path = path
         self.net = net
         self.run_config = run_config
+        self.ZO_Estim = ZO_Estim
 
         self.best_acc = 0
         self.start_epoch = 0
@@ -58,7 +61,7 @@ class RunManager:
 
         # net info
         net_info = get_net_info(
-            self.net, self.run_config.data_provider.data_shape, measure_latency, True
+            self.net, self.run_config.data_provider.data_shape, measure_latency, print_info=True
         )
         with open("%s/net_info.txt" % self.path, "w") as fout:
             fout.write(json.dumps(net_info, indent=4) + "\n")
@@ -385,6 +388,13 @@ class RunManager:
                 # compute gradient and do SGD step
                 self.net.zero_grad()  # or self.optimizer.zero_grad()
                 loss.backward()
+
+                if self.ZO_Estim is not None:
+                    obj_fn = build_obj_fn(self.ZO_Estim.obj_fn_type, data=images, target=labels, model=self.net, criterion=self.criterion)
+                    self.ZO_Estim.update_obj_fn(obj_fn)
+                    outputs, loss, grads = self.ZO_Estim.estimate_grad()
+                    self.ZO_Estim.update_grad()
+
                 self.optimizer.step()
 
                 # measure accuracy and record loss

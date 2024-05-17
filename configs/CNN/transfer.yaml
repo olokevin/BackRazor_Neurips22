@@ -1,0 +1,65 @@
+dataset: car
+# choices=[
+#     'aircraft', 'car', 'flowers102',
+#     'food101', 'cub200', 'pets',
+#     'cifar10', 'cifar100', 'ImageNet',])
+
+n_epochs: 100
+init_lr: 0.0003
+
+net: proxyless_mobile
+# net: mcunet-in2
+# choices=['proxyless_mobile', 'resnet', 'mcunet'])
+
+transfer_learning_method: 'bn+last'
+# choices=[
+#   'full', 'full_noBN', 'bn+last', 'last',
+#   'tinytl-bias', 'tinytl-lite_residual', 'tinytl-lite_residual+bias'])
+
+# false: replace BN with GN
+origin_network: false
+
+weight_quantization: true
+frozen_param_bits: 8
+
+weight_standardization: true
+
+ZO_Estim:
+  ####### ZO_Estim_MC #######
+  # en: True
+  name: ZO_Estim_MC
+  sigma: 0.01
+  n_sample: 10
+  signSGD: False
+
+  trainable_param_list: all
+
+  trainable_layer_list: all
+
+  quantize_method: None
+
+  mask_method: None
+  # mask_method: block-10
+  # mask_method: layer
+
+  estimate_method: forward
+  # estimate_method: antithetic
+
+  # obj_fn_type: classifier
+  # perturb_method: batch
+
+  obj_fn_type: classifier_layerwise
+  perturb_method: activation
+
+  # obj_fn_type: classifier_row
+  # perturb_method: single
+
+  # sample_method: uniform
+  # sample_method: gaussian
+  # sample_method: bernoulli
+  sample_method: coord_basis
+
+  prior_method: None
+  # prior_method: last_grad_perturb
+  # prior_method: mov_avg_perturb
+  # prior_method: last_grad_neighbor

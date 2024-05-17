@@ -5,17 +5,31 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "mcunet_eval",
+      "name": "test",
       "type": "debugpy",
       "request": "launch",
-      "program": "eval_torch.py",
+      "program": "CNN/tinytl_fgvc_train.py",
       "console": "integratedTerminal",
-      "cwd": "${workspaceFolder}/CNN",
+      // "cwd": "${workspaceFolder}/CNN",
       "env": {
         "CUDA_VISIBLE_DEVICES": "0",
         "PYDEVD_WARN_SLOW_RESOLVE_TIMEOUT": "2"
       },
-      "args": ["--net_id", "mcunet-in1", "--dataset", "imagenet", "--data-dir", "/home/yequan/dataset/ImageNet2012/val"],
+      "args": ["configs/CNN/test.yaml"],
+      "justMyCode": true
+    },
+    {
+      "name": "transfer",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "CNN/tinytl_fgvc_train.py",
+      "console": "integratedTerminal",
+      // "cwd": "${workspaceFolder}/CNN",
+      "env": {
+        "CUDA_VISIBLE_DEVICES": "0",
+        "PYDEVD_WARN_SLOW_RESOLVE_TIMEOUT": "2"
+      },
+      "args": ["configs/CNN/transfer.yaml"],
       "justMyCode": true
     }
   ]

@@ -6,6 +6,7 @@ __pycache__/
 *$py.class
 
 .exp/
+exp/
 
 # C extensions
 *.so

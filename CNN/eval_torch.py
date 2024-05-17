@@ -27,7 +27,7 @@ parser.add_argument('-j', '--workers', default=8, type=int, metavar='N',
 
 args = parser.parse_args()
 
-# torch.backends.cudnn.benchmark = True
+torch.backends.cudnn.benchmark = True
 device = torch.device('cuda:1')
 
 
