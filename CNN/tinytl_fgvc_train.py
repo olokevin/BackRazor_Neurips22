@@ -45,7 +45,7 @@ parser.add_argument('--manual_seed', default=0, type=int)
 parser.add_argument('--dataset', type=str, default='flowers102', choices=[
     'aircraft', 'car', 'flowers102',
     'food101', 'cub200', 'pets',
-    'cifar10', 'cifar100',
+    'cifar10', 'cifar100', 'ImageNet',
 ])
 parser.add_argument('--train_batch_size', type=int, default=8)
 parser.add_argument('--test_batch_size', type=int, default=100)
@@ -241,12 +241,13 @@ if __name__ == '__main__':
     init_models(classification_head)
   elif 'mcunet' in args.net:
     net, image_size, description = build_model(net_id=args.net, pretrained=True)
+    run_config.data_provider.assign_active_img_size(image_size)
     # replace bn layers with gn layers
-    replace_bn_with_gn(net, gn_channel_per_group=8)
+    # replace_bn_with_gn(net, gn_channel_per_group=8)
     
-    net.classifier = LinearLayer(net.classifier.in_features, run_config.data_provider.n_classes, dropout_rate=args.dropout)
-    classification_head.append(net.classifier)
-    init_models(classification_head)
+    # net.classifier = LinearLayer(net.classifier.in_features, run_config.data_provider.n_classes, dropout_rate=args.dropout)
+    # classification_head.append(net.classifier)
+    # init_models(classification_head)
   else:
     assert False
     if args.net_path is not None:
@@ -270,24 +271,24 @@ if __name__ == '__main__':
     net.load_state_dict(init)
 
   # set transfer learning configs
-  set_module_grad_status(net, args.enable_feature_extractor_update)
-  set_module_grad_status(classification_head, True)
-  if args.enable_bn_update:
-    enable_bn_update(net)
-  if args.disable_bn_update:
-    assert not args.enable_bn_update
-    disable_bn_update(net)
-  if args.enable_bias_update:
-    enable_bias_update(net)
-  if args.enable_lite_residual:
-    for m in net.modules():
-      if isinstance(m, LiteResidualModule):
-        set_module_grad_status(m.lite_residual, True)
-        if args.enable_bias_update or args.enable_bn_update:
-          m.lite_residual.final_bn.bias.requires_grad = False
-        if args.random_init_lite_residual:
-          init_models(m.lite_residual)
-          m.lite_residual.final_bn.weight.data.zero_()
+  # set_module_grad_status(net, args.enable_feature_extractor_update)
+  # set_module_grad_status(classification_head, True)
+  # if args.enable_bn_update:
+  #   enable_bn_update(net)
+  # if args.disable_bn_update:
+  #   assert not args.enable_bn_update
+  #   disable_bn_update(net)
+  # if args.enable_bias_update:
+  #   enable_bias_update(net)
+  # if args.enable_lite_residual:
+  #   for m in net.modules():
+  #     if isinstance(m, LiteResidualModule):
+  #       set_module_grad_status(m.lite_residual, True)
+  #       if args.enable_bias_update or args.enable_bn_update:
+  #         m.lite_residual.final_bn.bias.requires_grad = False
+  #       if args.random_init_lite_residual:
+  #         init_models(m.lite_residual)
+  #         m.lite_residual.final_bn.weight.data.zero_()
 
   # weight quantization on frozen parameters
   if args.disable_weight_quantization:
@@ -351,8 +352,8 @@ if __name__ == '__main__':
       run_manager.network.load_state_dict(checkpoint)
 
   # train
-  args.teacher_model = None
-  run_manager.train(args)
+  # args.teacher_model = None
+  # run_manager.train(args)
   # test
   img_size, loss, acc1, acc5 = run_manager.validate_all_resolution(is_test=True)
   log = 'test_loss: %f\t test_acc1: %f\t test_acc5: %f\t' % (list_mean(loss), list_mean(acc1), list_mean(acc5))

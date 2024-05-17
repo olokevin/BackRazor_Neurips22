@@ -198,3 +198,25 @@ class CIFAR100DataProvider(CIFAR10DataProvider):
   def test_dataset(self, _transforms):
     dataset = torchvision.datasets.CIFAR100(self.save_path, train=False, transform=_transforms, download=True)
     return dataset
+
+class ImageNetDataProvider(FGVCDataProvider):
+
+  @staticmethod
+  def name():
+    return 'ImageNet'
+
+  @property
+  def n_classes(self):
+    return 1000
+
+  @property
+  def save_path(self):
+    return os.path.expanduser('~/dataset/ImageNet2012')
+
+  def train_dataset(self, _transforms):
+    dataset = torchvision.datasets.ImageNet(self.save_path, split='train', transform=_transforms)
+    return dataset
+
+  def test_dataset(self, _transforms):
+    dataset = torchvision.datasets.ImageNet(self.save_path, split='val', transform=_transforms)
+    return dataset
