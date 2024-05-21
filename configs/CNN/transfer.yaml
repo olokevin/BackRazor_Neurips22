@@ -5,24 +5,31 @@ dataset: car
 #     'cifar10', 'cifar100', 'ImageNet',])
 
 n_epochs: 100
-init_lr: 0.0003
+init_lr: 0.003
 
-net: proxyless_mobile
-# net: mcunet-in2
-# choices=['proxyless_mobile', 'resnet', 'mcunet'])
+# net: proxyless_mobile
+# origin_network: false
+# weight_quantization: false
+# weight_standardization: true
 
-transfer_learning_method: 'bn+last'
+net: mcunet-in1
+origin_network: true
+weight_quantization: false
+weight_standardization: false
+image_size: 128
+
+transfer_learning_method: 'full'
+# transfer_learning_method: 'full_noBN'
+# transfer_learning_method: 'bn+last'
+# transfer_learning_method: 'last'
 # choices=[
 #   'full', 'full_noBN', 'bn+last', 'last',
 #   'tinytl-bias', 'tinytl-lite_residual', 'tinytl-lite_residual+bias'])
 
-# false: replace BN with GN
-origin_network: false
-
-weight_quantization: true
-frozen_param_bits: 8
-
-weight_standardization: true
+# origin_network: false -> replace BN with GN
+# origin_network: true
+# weight_quantization: false
+# weight_standardization: true
 
 ZO_Estim:
   ####### ZO_Estim_MC #######

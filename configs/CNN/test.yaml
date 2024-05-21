@@ -6,19 +6,18 @@ dataset: ImageNet
 
 n_epochs: 100
 init_lr: 0.0003
-label_smoothing: 0
 
 # net: proxyless_mobile
-net: mcunet-in2
+net: mcunet-in1
 # choices=['proxyless_mobile', 'resnet', 'mcunet'])
 
 transfer_learning_method: 'last'
 # choices=[
 #   'full', 'full_noBN', 'bn+last', 'last',
 #   'tinytl-bias', 'tinytl-lite_residual', 'tinytl-lite_residual+bias'])
-origin_network: false
+origin_network: true
 
 weight_quantization: false
 frozen_param_bits: 8
 
-weight_standardization: true
+weight_standardization: false
