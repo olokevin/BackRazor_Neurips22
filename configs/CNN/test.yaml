@@ -9,13 +9,15 @@ init_lr: 0.0003
 
 # net: proxyless_mobile
 net: mcunet-in1
+origin_network: true
+fuse_bn_add_gn: true
+gn_channel_per_group: null
 # choices=['proxyless_mobile', 'resnet', 'mcunet'])
 
 transfer_learning_method: 'last'
 # choices=[
 #   'full', 'full_noBN', 'bn+last', 'last',
 #   'tinytl-bias', 'tinytl-lite_residual', 'tinytl-lite_residual+bias'])
-origin_network: true
 
 weight_quantization: false
 frozen_param_bits: 8

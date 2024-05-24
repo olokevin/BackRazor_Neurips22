@@ -19,9 +19,14 @@ from ofa.model_zoo import proxylessnas_mobile
 # from ofa.imagenet_classification.run_manager import RunManager
 from CNN.run_manager import RunManager
 from ofa.utils import init_models, download_url, list_mean
-from ofa.utils import replace_conv2d_with_my_conv2d, replace_bn_with_gn
+
+### Use my own replace_conv2d_with_my_conv2d
+# from ofa.utils import replace_conv2d_with_my_conv2d, replace_bn_with_gn
+from ofa.utils import replace_bn_with_gn
+from CNN.utils import replace_conv2d_with_my_conv2d
+
 from CNN.data_providers import FGVCRunConfig
-from CNN.utils import set_module_grad_status, enable_bn_update, disable_bn_update, enable_bias_update, weight_quantization
+from CNN.utils import set_module_grad_status, enable_bn_update, disable_bn_update, enable_bias_update, weight_quantization, fuse_bn_add_gn
 from CNN.utils import profile_memory_cost
 from CNN.model import LiteResidualModule, build_network_from_config
 
@@ -256,7 +261,7 @@ if __name__ == '__main__':
     classification_head.append(net.fc)
     init_models(classification_head)
   elif 'mcunet' in args.net:
-    net, image_size, description = build_model(net_id=args.net, pretrained=True)
+    net, image_size, description = build_model(net_id=args.net, pretrained=args.pretrained)
     
     # from ofa.imagenet_classification.data_providers import ImagenetDataProvider
     # def new_normalize(self, *args, **kwargs):
@@ -266,6 +271,9 @@ if __name__ == '__main__':
     # replace bn layers with gn layers
     if not args.origin_network:
       replace_bn_with_gn(net, gn_channel_per_group=8)
+    else:
+      if args.fuse_bn_add_gn:
+        fuse_bn_add_gn(net, gn_channel_per_group=args.gn_channel_per_group)
     
     if args.eval_only:
       run_config.data_provider.assign_active_img_size(image_size)
@@ -315,30 +323,36 @@ if __name__ == '__main__':
           init_models(m.lite_residual)
           m.lite_residual.final_bn.weight.data.zero_()
   
-  ##### ProxylessNAS-Mobile
-  # sparse update
-  # weight_update_layer_list = [17,18,19,20,21]
-  # for layer_num in weight_update_layer_list:
-  #   net.blocks[layer_num].conv.main_branch.inverted_bottleneck.conv.weight.requires_grad = True
+  # for name, module in net.named_modules():
+  #   print(name)
+  #   for child_name, child in module.named_children():
+  #       print(child_name)
   
-  # last 2 block
-  # weight_update_layer_list = [20,21]
-  # for layer_num in weight_update_layer_list:
-  #   net.blocks[layer_num].conv.main_branch.inverted_bottleneck.conv.weight.requires_grad = True
-  #   net.blocks[layer_num].conv.main_branch.depth_conv.conv.weight.requires_grad = True
-  #   net.blocks[layer_num].conv.main_branch.point_linear.conv.weight.requires_grad = True
-
-  ##### MCUNet
-  # sparse update
-  # weight_update_layer_list = [7,8,9,11,12,13]
-  # for layer_num in weight_update_layer_list:
-  #   net.blocks[layer_num].mobile_inverted_conv.inverted_bottleneck.conv.weight.requires_grad = True
-  # last 2 block
-  weight_update_layer_list = [-2,-1]
-  for layer_num in weight_update_layer_list:
-    net.blocks[layer_num].mobile_inverted_conv.inverted_bottleneck.conv.weight.requires_grad = True
-    net.blocks[layer_num].mobile_inverted_conv.depth_conv.conv.weight.requires_grad = True
-    net.blocks[layer_num].mobile_inverted_conv.point_linear.conv.weight.requires_grad = True
+  if args.train_first_conv == True:
+    net.first_conv.conv.weight.requires_grad = True
+    if hasattr(net.first_conv, 'bn'):
+      net.first_conv.bn.weight.requires_grad = True
+      net.first_conv.bn.bias.requires_grad = True
+  
+  if args.trainable_blocks is not None and args.trainable_layers is not None:
+    if args.net == 'proxyless_mobile':
+      for layer_num in args.trainable_block:
+          if args.trainable_layers == 'first':
+            net.blocks[layer_num].conv.main_branch.inverted_bottleneck.conv.weight.requires_grad = True
+          elif args.trainable_layers == 'all':
+            net.blocks[layer_num].conv.main_branch.inverted_bottleneck.conv.weight.requires_grad = True
+            net.blocks[layer_num].conv.main_branch.depth_conv.conv.weight.requires_grad = True
+            net.blocks[layer_num].conv.main_branch.point_linear.conv.weight.requires_grad = True
+    elif 'mcunet' in args.net:
+      for layer_num in args.trainable_blocks:
+        if args.trainable_layers == 'first':
+          net.blocks[layer_num].mobile_inverted_conv.inverted_bottleneck.conv.weight.requires_grad = True
+        elif args.trainable_layers == 'all':
+          net.blocks[layer_num].mobile_inverted_conv.inverted_bottleneck.conv.weight.requires_grad = True
+          net.blocks[layer_num].mobile_inverted_conv.depth_conv.conv.weight.requires_grad = True
+          net.blocks[layer_num].mobile_inverted_conv.point_linear.conv.weight.requires_grad = True
+    else:
+      raise NotImplementedError(f'not supported {args.net} for sparse training')
 
   # weight quantization on frozen parameters
   if not args.resume and args.weight_quantization:

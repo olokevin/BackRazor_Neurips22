@@ -43,13 +43,23 @@ ws_eps: 0.00001
 net_path: null
 fix_bn_stat: false
 
+pretrained: true
+
 ### transfer learning configs ###
 transfer_learning_method: 'tinytl-lite_residual+bias'
 # choices=[
 #   'full', 'full_noBN', 'bn+last', 'last',
 #   'tinytl-bias', 'tinytl-lite_residual', 'tinytl-lite_residual+bias'])
 
+train_first_conv: false
+trainable_blocks: null
+trainable_layers: null
+
 origin_network: false
+
+fuse_bn_add_gn: false
+gn_channel_per_group: null
+
 backRazor: false
 backRazor_pruneRatio: 0.8
 backRazor_pruneRatio_head: -1
