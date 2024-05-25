@@ -7,12 +7,15 @@ dataset: ImageNet
 n_epochs: 100
 init_lr: 0.0003
 
-# net: proxyless_mobile
-net: mcunet-in1
-origin_network: true
-fuse_bn_add_gn: true
-gn_channel_per_group: null
-# choices=['proxyless_mobile', 'resnet', 'mcunet'])
+net: proxyless_mobile
+origin_network: false
+weight_quantization: false
+weight_standardization: true
+
+# net: mcunet-in1
+# origin_network: true
+# fuse_bn_add_gn: true
+# gn_channel_per_group: null
 
 transfer_learning_method: 'last'
 # choices=[

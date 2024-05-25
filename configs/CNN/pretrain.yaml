@@ -12,7 +12,7 @@ opt_type: sgd
 
 # net: proxyless_mobile
 
-net: mcunet-in1
+net: mcunet-in3
 pretrained: false
 origin_network: false
 weight_quantization: false

@@ -12,15 +12,23 @@ init_lr: 0.0003
 # weight_quantization: false
 # weight_standardization: true
 
-net: mcunet-in1
-# origin_network: false -> replace BN with GN
-# origin_network: true, fuse_bn_add_gn=false -> original network with BN
-# origin_network: true, fuse_bn_add_gn=true -> fuse BN (add GN if gn_channel_per_group is not null)
-origin_network: true
-fuse_bn_add_gn: true
+net: mcunet-in3
+### origin_network: false -> replace BN with GN
+# origin_network: false
+# weight_standardization: true
 
-gn_channel_per_group: null
+### origin_network: true, fuse_bn_add_gn=false -> original network with BN
+origin_network: true
+fuse_bn_add_gn: false
 weight_standardization: false
+
+fix_bn_stat: true
+
+### origin_network: true, fuse_bn_add_gn=true -> fuse BN (add GN if gn_channel_per_group is not null)
+# fuse_bn_add_gn: true
+
+# gn_channel_per_group: null
+# weight_standardization: false
 
 # gn_channel_per_group: 8
 # weight_standardization: true
@@ -28,19 +36,19 @@ weight_standardization: false
 weight_quantization: false
 image_size: 128
 
-# transfer_learning_method: 'full'
+transfer_learning_method: 'full'
 # transfer_learning_method: 'full_noBN'
 # transfer_learning_method: 'bn+last'
-transfer_learning_method: 'last'
+# transfer_learning_method: 'last'
 
 # choices=[
 #   'full', 'full_noBN', 'bn+last', 'last',
 #   'tinytl-bias', 'tinytl-lite_residual', 'tinytl-lite_residual+bias'])
 
-train_first_conv: true
+# train_first_conv: true
 
-trainable_blocks: [-2,-1]
-trainable_layers: 'all'
+# trainable_blocks: [-2,-1]
+# trainable_layers: 'all'
 
 # trainable_blocks: [-1,-2,-3,-4,-6,-7]
 # trainable_layers: 'first'
