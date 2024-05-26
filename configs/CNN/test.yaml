@@ -14,6 +14,8 @@ weight_standardization: true
 
 # net: mcunet-in1
 # origin_network: true
+# weight_quantization: false
+# weight_standardization: false
 # fuse_bn_add_gn: true
 # gn_channel_per_group: null
 
@@ -21,8 +23,3 @@ transfer_learning_method: 'last'
 # choices=[
 #   'full', 'full_noBN', 'bn+last', 'last',
 #   'tinytl-bias', 'tinytl-lite_residual', 'tinytl-lite_residual+bias'])
-
-weight_quantization: false
-frozen_param_bits: 8
-
-weight_standardization: false

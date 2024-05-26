@@ -238,11 +238,15 @@ if __name__ == '__main__':
       # net.classifier = nn.Sequential(nn.Dropout(args.dropout),
       #                  LinearSparse(net.classifier.in_features, run_config.data_provider.n_classes,
       #                       masker=masker, act_prune=args.backRazor_act_prune))
+      # classification_head.append(net.classifier)
+      # init_models(classification_head)
     else:
-      net.classifier = LinearLayer(
-        net.classifier.in_features, run_config.data_provider.n_classes, dropout_rate=args.dropout)
-    classification_head.append(net.classifier)
-    init_models(classification_head)
+      if args.eval_only:
+        pass
+      else:
+        net.classifier = LinearLayer(net.classifier.in_features, run_config.data_provider.n_classes, dropout_rate=args.dropout)
+        classification_head.append(net.classifier)
+        init_models(classification_head)
   elif "resnet" in args.net:
     net = models.__dict__[args.net](pretrained=True)
     if args.backRazor:
