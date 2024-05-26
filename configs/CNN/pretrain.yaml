@@ -12,12 +12,22 @@ opt_type: sgd
 
 # net: proxyless_mobile
 
-net: mcunet-in3
+# net: mcunet-in1
+# image_size: 96
+
+# net: mcunet-in2
+# image_size: 160
+
+# net: mcunet-in3
+# image_size: 176
+
+net: mcunet-in4
+image_size: 160
+
 pretrained: false
 origin_network: false
 weight_quantization: false
 weight_standardization: true
-image_size: 96
 # choices=['proxyless_mobile', 'resnet', 'mcunet'])
 
 transfer_learning_method: 'full'

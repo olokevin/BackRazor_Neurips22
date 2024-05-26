@@ -12,7 +12,7 @@ init_lr: 0.0003
 # weight_quantization: false
 # weight_standardization: true
 
-net: mcunet-in3
+net: mcunet-in1
 ### origin_network: false -> replace BN with GN
 # origin_network: false
 # weight_standardization: true
