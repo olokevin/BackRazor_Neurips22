@@ -13,7 +13,7 @@ class FGVCRunConfig(ImagenetRunConfig):
                  dataset='flowers102', train_batch_size=256, test_batch_size=500, valid_size=None,
                  opt_type='sgd', opt_param=None, weight_decay=4e-5, label_smoothing=0, no_decay_keys=None,
                  mixup_alpha=None, model_init='he_fout', validation_frequency=1, print_frequency=10,
-                 n_worker=32, resize_scale=0.08, distort_color='tf', image_size=224, fast_evaluation=True, **kwargs):
+                 n_worker=32, resize_scale=0.08, distort_color='tf', image_size=224, fast_evaluation=True, grad_accumulation_steps=1, **kwargs):
         super(FGVCRunConfig, self).__init__(
             n_epochs, init_lr, lr_schedule_type, lr_schedule_param,
             dataset, train_batch_size, test_batch_size, valid_size,
@@ -22,6 +22,7 @@ class FGVCRunConfig(ImagenetRunConfig):
             n_worker, resize_scale, distort_color, image_size, **kwargs,
         )
         self.fast_evaluation = fast_evaluation
+        self.grad_accumulation_steps = grad_accumulation_steps
 
     @property
     def data_provider(self):

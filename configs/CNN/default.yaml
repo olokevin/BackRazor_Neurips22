@@ -15,7 +15,8 @@ train_batch_size: 8
 test_batch_size: 100
 valid_size: null  # use test set as validation set
 
-n_worker: 10
+n_worker: 8
+# n_worker: 10
 resize_scale: 0.22
 distort_color: 'torch'
 # choices=['tf', 'torch', 'None'])
@@ -34,6 +35,8 @@ weight_decay: 0
 no_decay_keys: 'bn#bias'
 # choices=['None', 'bn', 'bn#bias', 'bias'])
 label_smoothing: 0.7
+
+grad_accumulation_steps: 1
 
 ### net config ###
 net: 'proxyless_mobile'

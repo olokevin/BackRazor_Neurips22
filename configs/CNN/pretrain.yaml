@@ -3,12 +3,14 @@ dataset: ImageNet
 #     'aircraft', 'car', 'flowers102',
 #     'food101', 'cub200', 'pets',
 #     'cifar10', 'cifar100', 'ImageNet',])
-train_batch_size: 128
+train_batch_size: 16
 
 n_epochs: 450
 init_lr: 0.05
 weight_decay: 0.00005
 opt_type: sgd
+
+grad_accumulation_steps: 16
 
 # net: proxyless_mobile
 

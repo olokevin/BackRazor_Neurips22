@@ -386,7 +386,7 @@ class RunManager:
                     loss_type = "%.1fkd+ce" % args.kd_ratio
 
                 # compute gradient and do SGD step
-                self.net.zero_grad()  # or self.optimizer.zero_grad()
+                # self.net.zero_grad()  # or self.optimizer.zero_grad()
                 loss.backward()
 
                 if self.ZO_Estim is not None:
@@ -395,7 +395,15 @@ class RunManager:
                     outputs, loss, grads = self.ZO_Estim.estimate_grad()
                     self.ZO_Estim.update_grad()
 
-                self.optimizer.step()
+                if self.run_config.grad_accumulation_steps > 1:
+                    # The gradients are computed for each mini-batch by calling loss.backward(). 
+                    # This adds the gradients to the existing values instead of replacing them.
+                    if (i + 1) % self.run_config.grad_accumulation_steps == 0:
+                        self.optimizer.step()
+                        self.optimizer.zero_grad()
+                else:
+                    self.optimizer.step()
+                    self.optimizer.zero_grad()  # or self.net.zero_grad()
 
                 # measure accuracy and record loss
                 losses.update(loss.item(), images.size(0))
