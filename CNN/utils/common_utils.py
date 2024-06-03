@@ -7,7 +7,7 @@ from sklearn.cluster import KMeans
 
 __all__ = [
     'module_require_grad', 'set_module_grad_status', 'enable_bn_update', 'disable_bn_update', 'enable_bias_update',
-    'weight_quantization', 'fuse_bn_add_gn', 'replace_conv2d_with_my_conv2d'
+    'weight_quantization', 'fuse_bn', 'fuse_bn_add_gn', 'replace_bn_with_insn', 'replace_conv2d_with_my_conv2d'
 ]
 
 
@@ -26,13 +26,13 @@ def set_module_grad_status(module, flag=False):
 
 def enable_bn_update(model):
     for m in model.modules():
-        if type(m) in [nn.BatchNorm2d, nn.GroupNorm] and m.weight is not None:
+        if type(m) in [nn.BatchNorm2d, nn.GroupNorm, nn.InstanceNorm2d] and m.weight is not None:
             set_module_grad_status(m, True)
 
 
 def disable_bn_update(model):
     for m in model.modules():
-        if type(m) in [nn.BatchNorm2d, nn.GroupNorm] and m.weight is not None:
+        if type(m) in [nn.BatchNorm2d, nn.GroupNorm, nn.InstanceNorm2d] and m.weight is not None:
             set_module_grad_status(m, False)
 
 
@@ -98,7 +98,32 @@ def min_divisible_value(n1, v1):
         v1 -= 1
     return v1
 
+##### fuse BN, and delete BN
 def fuse_bn(model):
+    for m in model.modules():
+        to_replace_dict = {}
+        to_pop_name_list = []
+        conv_name = None
+        conv_sub_m = None
+        for name, sub_m in m.named_children():
+            if isinstance(sub_m, nn.Conv2d):
+                conv_name = name
+                conv_sub_m = sub_m
+            elif isinstance(sub_m, nn.BatchNorm2d) and conv_sub_m is not None:
+
+                conv_sub_m.eval()
+                sub_m.eval()
+                fused_conv = fuse_conv_bn_eval(conv_sub_m, sub_m)
+                fused_conv.train()
+                to_replace_dict[conv_name] = fused_conv
+                to_pop_name_list.append(name)
+
+        for to_pop_name in to_pop_name_list:
+            m._modules.pop(to_pop_name)
+        m._modules.update(to_replace_dict)
+
+##### fuse BN, and add GN
+def fuse_bn_add_gn(model, gn_channel_per_group=None):
     for m in model.modules():
         to_replace_dict = {}
         conv_name = None
@@ -114,73 +139,53 @@ def fuse_bn(model):
                 fused_conv = fuse_conv_bn_eval(conv_sub_m, sub_m)
                 fused_conv.train()
                 to_replace_dict[conv_name] = fused_conv
+                
+                num_groups = sub_m.num_features // min_divisible_value(
+                    sub_m.num_features, gn_channel_per_group
+                )
+                gn_m = nn.GroupNorm(
+                    num_groups=num_groups,
+                    num_channels=sub_m.num_features,
+                    eps=sub_m.eps,
+                    affine=True,
+                )
 
-                # delete BN layer
-                m._modules.pop(name)
+                # don't load weight. just initialize
+                # gn_m.weight.data.copy_(sub_m.weight.data)
+                # gn_m.bias.data.copy_(sub_m.bias.data)
+
+                # load requires_grad
+                gn_m.weight.requires_grad = sub_m.weight.requires_grad
+                gn_m.bias.requires_grad = sub_m.bias.requires_grad
+
+                to_replace_dict[name] = gn_m
         m._modules.update(to_replace_dict)
 
-def fuse_bn_add_gn(model, gn_channel_per_group=None):
-    # fuse BN, and delete BN
-    if gn_channel_per_group is None:
-        for m in model.modules():
-            to_replace_dict = {}
-            to_pop_name_list = []
-            conv_name = None
-            conv_sub_m = None
-            for name, sub_m in m.named_children():
-                if isinstance(sub_m, nn.Conv2d):
-                    conv_name = name
-                    conv_sub_m = sub_m
-                elif isinstance(sub_m, nn.BatchNorm2d) and conv_sub_m is not None:
+##### replace BN with InstanceNorm
+def replace_bn_with_insn(model):
+    for m in model.modules():
+        to_replace_dict = {}
+        for name, sub_m in m.named_children():
+            if isinstance(sub_m, nn.BatchNorm2d):
+                insn_m = nn.InstanceNorm2d(
+                    num_features=sub_m.num_features,
+                    eps=sub_m.eps,
+                    affine=True,
+                    track_running_stats=True,
+                )
 
-                    conv_sub_m.eval()
-                    sub_m.eval()
-                    fused_conv = fuse_conv_bn_eval(conv_sub_m, sub_m)
-                    fused_conv.train()
-                    to_replace_dict[conv_name] = fused_conv
-                    to_pop_name_list.append(name)
+                # load weight
+                insn_m.weight.data.copy_(sub_m.weight.data)
+                insn_m.bias.data.copy_(sub_m.bias.data)
+                # load running statistics
+                insn_m.running_mean.copy_(sub_m.running_mean)
+                insn_m.running_var.copy_(sub_m.running_var)
+                # load requires_grad
+                insn_m.weight.requires_grad = sub_m.weight.requires_grad
+                insn_m.bias.requires_grad = sub_m.bias.requires_grad
 
-            for to_pop_name in to_pop_name_list:
-                m._modules.pop(to_pop_name)
-            m._modules.update(to_replace_dict)
-    # fuse BN, and add GN
-    else:
-        for m in model.modules():
-            to_replace_dict = {}
-            conv_name = None
-            conv_sub_m = None
-            for name, sub_m in m.named_children():
-                if isinstance(sub_m, nn.Conv2d):
-                    conv_name = name
-                    conv_sub_m = sub_m
-                elif isinstance(sub_m, nn.BatchNorm2d) and conv_sub_m is not None:
-
-                    conv_sub_m.eval()
-                    sub_m.eval()
-                    fused_conv = fuse_conv_bn_eval(conv_sub_m, sub_m)
-                    fused_conv.train()
-                    to_replace_dict[conv_name] = fused_conv
-                    
-                    num_groups = sub_m.num_features // min_divisible_value(
-                        sub_m.num_features, gn_channel_per_group
-                    )
-                    gn_m = nn.GroupNorm(
-                        num_groups=num_groups,
-                        num_channels=sub_m.num_features,
-                        eps=sub_m.eps,
-                        affine=True,
-                    )
-
-                    # don't load weight. just initialize
-                    # gn_m.weight.data.copy_(sub_m.weight.data)
-                    # gn_m.bias.data.copy_(sub_m.bias.data)
-
-                    # load requires_grad
-                    gn_m.weight.requires_grad = sub_m.weight.requires_grad
-                    gn_m.bias.requires_grad = sub_m.bias.requires_grad
-
-                    to_replace_dict[name] = gn_m
-            m._modules.update(to_replace_dict)
+                to_replace_dict[name] = insn_m
+        m._modules.update(to_replace_dict)
 
 from ofa.utils import MyConv2d
 def replace_conv2d_with_my_conv2d(net, ws_eps=None):

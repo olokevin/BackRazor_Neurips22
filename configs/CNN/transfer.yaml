@@ -3,9 +3,13 @@ dataset: car
 #     'aircraft', 'car', 'flowers102',
 #     'food101', 'cub200', 'pets',
 #     'cifar10', 'cifar100', 'ImageNet',])
+train_batch_size: 8
 
 n_epochs: 100
 init_lr: 0.0003
+opt_type: sgd
+
+validation_frequency: 10
 
 # net: proxyless_mobile
 # origin_network: false
@@ -13,32 +17,41 @@ init_lr: 0.0003
 # weight_standardization: true
 
 net: mcunet-in1
-### origin_network: false -> replace BN with GN
+# pretrain_model_path: '/home/zyq123/Project/Edge/BackRazor_Neurips22/assets/mcunet_in1@ws+gn.pth.tar'
+# net: mcunet-in4
+# pretrain_model_path: '/home/zyq123/Project/Edge/BackRazor_Neurips22/assets/mcunet_in4@ws+gn.pth.tar'
+
+###### origin_network: false -> replace BN with GN ######
 # origin_network: false
 # weight_standardization: true
 
-### origin_network: true, fuse_bn_add_gn=false -> original network with BN
+###### origin_network: true, replace_norm_layer=null -> original network with BN/GN ######
 origin_network: true
-fuse_bn_add_gn: false
+replace_norm_layer: null
 weight_standardization: false
 
-fix_bn_stat: true
+# fix_bn_stat: true
 
-### origin_network: true, fuse_bn_add_gn=true -> fuse BN (add GN if gn_channel_per_group is not null)
-# fuse_bn_add_gn: true
-
-# gn_channel_per_group: null
+###### origin_network: true, replace_norm_layer choices=[null, 'fuse_bn', 'fuse_bn_add_gn', 'replace_bn_with_insn']) ######
+# origin_network: true
+# replace_norm_layer: fuse_bn
 # weight_standardization: false
 
+# origin_network: true
+# replace_norm_layer: fuse_bn_add_gn
 # gn_channel_per_group: 8
 # weight_standardization: true
+
+# origin_network: true
+# replace_norm_layer: replace_bn_with_insn
+# weight_standardization: false
 
 weight_quantization: false
 image_size: 128
 
-transfer_learning_method: 'full'
+# transfer_learning_method: 'full'
 # transfer_learning_method: 'full_noBN'
-# transfer_learning_method: 'bn+last'
+transfer_learning_method: 'bn+last'
 # transfer_learning_method: 'last'
 
 # choices=[
@@ -47,11 +60,14 @@ transfer_learning_method: 'full'
 
 # train_first_conv: true
 
+trainable_blocks: [-1,-2,-3,-4,-6,-7]
+trainable_layers: 'first'
+
 # trainable_blocks: [-2,-1]
 # trainable_layers: 'all'
 
-# trainable_blocks: [-1,-2,-3,-4,-6,-7]
-# trainable_layers: 'first'
+# trainable_blocks: [-1,-2,-3,-4,-5,-6,-7]
+# trainable_layers: 'all'
 
 # origin_network: false -> replace BN with GN
 # origin_network: true

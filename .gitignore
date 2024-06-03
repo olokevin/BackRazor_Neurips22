@@ -8,6 +8,8 @@ __pycache__/
 .exp/
 exp/
 
+assets/
+
 # C extensions
 *.so
 

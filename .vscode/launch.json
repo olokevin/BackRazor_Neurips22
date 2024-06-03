@@ -15,7 +15,7 @@
         "CUDA_VISIBLE_DEVICES": "0",
         "PYDEVD_WARN_SLOW_RESOLVE_TIMEOUT": "2"
       },
-      "args": ["configs/CNN/test.yaml"],
+      "args": ["configs/CNN/test.yaml", "--eval_only"],
       "justMyCode": true
     },
     {

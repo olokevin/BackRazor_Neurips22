@@ -26,7 +26,7 @@ from ofa.utils import replace_bn_with_gn
 from CNN.utils import replace_conv2d_with_my_conv2d
 
 from CNN.data_providers import FGVCRunConfig
-from CNN.utils import set_module_grad_status, enable_bn_update, disable_bn_update, enable_bias_update, weight_quantization, fuse_bn_add_gn
+from CNN.utils import set_module_grad_status, enable_bn_update, disable_bn_update, enable_bias_update, weight_quantization
 from CNN.utils import profile_memory_cost
 from CNN.model import LiteResidualModule, build_network_from_config
 
@@ -40,6 +40,7 @@ from pdb import set_trace
 
 ### my add
 from CNN.mcunet.model_zoo import net_id_list, build_model, download_tflite
+from CNN.utils import fuse_bn, fuse_bn_add_gn, replace_bn_with_insn
 from tools.config import configs, load_config_from_file, update_config_from_args, update_config_from_unknown_args
 from ZO_Estim.ZO_Estim_entry import build_ZO_Estim
 from torchvision import datasets, transforms
@@ -224,7 +225,7 @@ if __name__ == '__main__':
       replace_bn_with_gn(net, gn_channel_per_group=8)
       # load pretrained model
       init_file = download_url('https://hanlab18.mit.edu/projects/tinyml/tinyTL/files/'
-                   'proxylessnas_mobile+lite_residual@imagenet@ws+gn', model_dir='~/.tinytl/')
+                   'proxylessnas_mobile+lite_residual@imagenet@ws+gn', model_dir='./assets/')
       net.load_state_dict(torch.load(init_file, map_location='cpu')['state_dict'])
 
     if args.backRazor:
@@ -266,18 +267,23 @@ if __name__ == '__main__':
     init_models(classification_head)
   elif 'mcunet' in args.net:
     net, image_size, description = build_model(net_id=args.net, pretrained=args.pretrained)
-    
-    # from ofa.imagenet_classification.data_providers import ImagenetDataProvider
-    # def new_normalize(self, *args, **kwargs):
-    #   return transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
-    # run_config.data_provider.normalize = new_normalize.__get__(run_config.data_provider, ImagenetDataProvider)
 
     # replace bn layers with gn layers
-    if not args.origin_network:
+    if args.origin_network == False:
       replace_bn_with_gn(net, gn_channel_per_group=8)
     else:
-      if args.fuse_bn_add_gn:
+      if args.replace_norm_layer == 'fuse_bn':
+        fuse_bn(net)
+      elif args.replace_norm_layer == 'fuse_bn_add_gn':
         fuse_bn_add_gn(net, gn_channel_per_group=args.gn_channel_per_group)
+      elif args.replace_norm_layer == 'replace_bn_with_insn':
+        replace_bn_with_insn(net)
+      else:
+        pass
+    
+    # load pretrained model
+    if args.pretrain_model_path is not None:
+      net.load_state_dict(torch.load(args.pretrain_model_path, map_location='cpu')['state_dict'])
     
     if args.eval_only:
       run_config.data_provider.assign_active_img_size(image_size)

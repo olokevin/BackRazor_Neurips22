@@ -3,19 +3,20 @@ dataset: ImageNet
 #     'aircraft', 'car', 'flowers102',
 #     'food101', 'cub200', 'pets',
 #     'cifar10', 'cifar100', 'ImageNet',])
-train_batch_size: 16
+train_batch_size: 64
 
 n_epochs: 450
 init_lr: 0.05
 weight_decay: 0.00005
 opt_type: sgd
 
-grad_accumulation_steps: 16
+validation_frequency: 10
+grad_accumulation_steps: 4
 
 # net: proxyless_mobile
 
-# net: mcunet-in1
-# image_size: 96
+net: mcunet-in1
+image_size: 96
 
 # net: mcunet-in2
 # image_size: 160
@@ -23,8 +24,8 @@ grad_accumulation_steps: 16
 # net: mcunet-in3
 # image_size: 176
 
-net: mcunet-in4
-image_size: 160
+# net: mcunet-in4
+# image_size: 160
 
 pretrained: false
 origin_network: false

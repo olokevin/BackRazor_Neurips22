@@ -36,6 +36,7 @@ no_decay_keys: 'bn#bias'
 # choices=['None', 'bn', 'bn#bias', 'bias'])
 label_smoothing: 0.7
 
+validation_frequency: 1
 grad_accumulation_steps: 1
 
 ### net config ###
@@ -47,6 +48,7 @@ net_path: null
 fix_bn_stat: false
 
 pretrained: true
+pretrain_model_path: null
 
 ### transfer learning configs ###
 transfer_learning_method: 'tinytl-lite_residual+bias'
@@ -60,7 +62,7 @@ trainable_layers: null
 
 origin_network: false
 
-fuse_bn_add_gn: false
+replace_norm_layer: null
 gn_channel_per_group: null
 
 backRazor: false
