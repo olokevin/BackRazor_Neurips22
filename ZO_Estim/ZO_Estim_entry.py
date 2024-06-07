@@ -4,6 +4,9 @@ import torch.nn as nn
 from .ZO_utils import SplitedLayer, SplitedParam, split_model
 from .ZO_Estim_MC import ZO_Estim_MC
 
+### Model specific utils ###
+from .ZO_proxylessnas_utils import opt_able_layers_dict, get_iterable_block_name, pre_block_forward, post_block_forward
+
 def create_opt_layer_list(layer_list, opt_able_layers_dict):
     if isinstance(layer_list, str):
         return opt_able_layers_dict[layer_list]
@@ -15,10 +18,15 @@ def create_opt_layer_list(layer_list, opt_able_layers_dict):
     else:
         raise (ValueError("opt_layers_strs should either be a string of a list of strings"))
 
-def build_ZO_Estim(config, model, opt_able_layers_dict):
+def fwd_hook_get_output_shape(module, input, output):
+    module.output_shape = output.shape
+
+def build_ZO_Estim(config, model):
     if config.name == 'ZO_Estim_MC':
-        ### Splited model
-        split_modules_list = split_model(model)
+        ### split model
+        iterable_block_name = get_iterable_block_name()
+        split_modules_list = split_model(model, iterable_block_name)
+
         splited_param_list = None
         splited_layer_list = None
 
@@ -31,26 +39,35 @@ def build_ZO_Estim(config, model, opt_able_layers_dict):
                 param_perturb_block_idx_list = config.param_perturb_block_idx_list
             
             splited_param_list = []
-            for name, param in model.named_parameters():
-                if any(keyword in name for keyword in param_perturb_param_list):
-                    block_idx = int(name.split('.')[1])
-                    if block_idx in param_perturb_block_idx_list:
+
+            for block_idx in param_perturb_block_idx_list:
+                if block_idx < 0:
+                    block_idx = len(split_modules_list) + block_idx
+                block = split_modules_list[block_idx]
+                for name, param in model.named_parameters():
+                    if any(keyword in name for keyword in param_perturb_param_list):
                         splited_param_list.append(SplitedParam(idx=block_idx, name=name, param=param))
         
         ### Actv perturb 
         if config.actv_perturb_layer_list is not None:
-            actv_perturb_layer_list = create_opt_layer_list(config.actv_perturb_layer_list, opt_able_layers_dict)
+            # actv_perturb_layer_list = create_opt_layer_list(config.actv_perturb_layer_list, opt_able_layers_dict)
+            actv_perturb_layer_list = config.actv_perturb_layer_list
+
             if config.actv_perturb_block_idx_list == 'all':
                 actv_perturb_block_idx_list = list(range(len(split_modules_list)))
             else:
                 actv_perturb_block_idx_list = config.actv_perturb_block_idx_list
 
             splited_layer_list = []
-            for name, layer in model.named_modules():
-                if type(layer) in actv_perturb_layer_list:
-                  block_idx = int(name.split('.')[1])
-                  if block_idx in actv_perturb_block_idx_list:
-                      splited_layer_list.append(SplitedLayer(idx=block_idx, name=name, layer=layer))
+
+            for block_idx in actv_perturb_block_idx_list:
+                if block_idx < 0:
+                    block_idx = len(split_modules_list) + block_idx
+                block = split_modules_list[block_idx]
+                for name, layer in block.named_modules():
+                    if any(keyword in name for keyword in actv_perturb_layer_list):
+                        splited_layer_list.append(SplitedLayer(idx=block_idx, name=name, layer=layer))
+                        fwd_hook_handle = layer.register_forward_hook(fwd_hook_get_output_shape)
 
         ZO_Estim = ZO_Estim_MC(
             model = model, 
@@ -65,7 +82,11 @@ def build_ZO_Estim(config, model, opt_able_layers_dict):
             quantized = config.quantized,
             estimate_method = config.estimate_method,
             sample_method = config.sample_method,
-            normalize_perturbation = config.normalize_perturbation
+            normalize_perturbation = config.normalize_perturbation,
+
+            get_iterable_block_name = get_iterable_block_name,
+            pre_block_forward = pre_block_forward,
+            post_block_forward = post_block_forward
         )
         return ZO_Estim
     else:

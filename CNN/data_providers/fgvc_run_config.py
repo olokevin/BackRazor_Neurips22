@@ -24,6 +24,9 @@ class FGVCRunConfig(ImagenetRunConfig):
         self.fast_evaluation = fast_evaluation
         self.grad_accumulation_steps = grad_accumulation_steps
 
+        self.grad_output_prune_ratio = kwargs['grad_output_prune_ratio']
+        self.trainable_blocks = kwargs['trainable_blocks']
+
     @property
     def data_provider(self):
         if self.__dict__.get('_data_provider', None) is None:

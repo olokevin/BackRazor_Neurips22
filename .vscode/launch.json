@@ -29,7 +29,7 @@
         "CUDA_VISIBLE_DEVICES": "0",
         "PYDEVD_WARN_SLOW_RESOLVE_TIMEOUT": "2"
       },
-      "args": ["configs/CNN/transfer.yaml"],
+      "args": ["configs/CNN/transfer.yaml", "--debug"],
       "justMyCode": true
     }
   ]

@@ -1,5 +1,6 @@
 path: null
 eval_only: false
+debug: false
 # gpu: '0'
 resume: 0
 manual_seed: 0
@@ -59,6 +60,7 @@ transfer_learning_method: 'tinytl-lite_residual+bias'
 train_first_conv: false
 trainable_blocks: null
 trainable_layers: null
+grad_output_prune_ratio: null
 
 origin_network: false
 

@@ -42,13 +42,16 @@ from pdb import set_trace
 from CNN.mcunet.model_zoo import net_id_list, build_model, download_tflite
 from CNN.utils import fuse_bn, fuse_bn_add_gn, replace_bn_with_insn
 from tools.config import configs, load_config_from_file, update_config_from_args, update_config_from_unknown_args
-from ZO_Estim.ZO_Estim_entry import build_ZO_Estim
+
 from torchvision import datasets, transforms
+
+from ZO_Estim.ZO_Estim_entry import build_ZO_Estim
 
 parser = argparse.ArgumentParser()
 parser.add_argument('config', metavar='FILE', help='config file')
 parser.add_argument('--path', type=str, metavar='DIR', help='run directory')
 parser.add_argument('--eval_only', action='store_true')
+parser.add_argument('--debug', action='store_true')
 
 # parser = argparse.ArgumentParser()
 # parser.add_argument('--path', type=str, default=None)
@@ -151,6 +154,7 @@ if __name__ == '__main__':
   args = configs
   args.path = arguments.path
   args.eval_only = arguments.eval_only
+  args.debug = arguments.debug  
 
   if args.path is None:
     args.path = os.path.join(
@@ -333,10 +337,25 @@ if __name__ == '__main__':
           init_models(m.lite_residual)
           m.lite_residual.final_bn.weight.data.zero_()
   
-  # for name, module in net.named_modules():
-  #   print(name)
-  #   for child_name, child in module.named_children():
-  #       print(child_name)
+  ##### Test weight size and output size #####
+  # for name, layer in net.named_modules():
+  #   if isinstance(layer, nn.Conv2d):
+  #     print(f'{layer.weight.data.numel()}')
+
+  # print('output size')
+  # def print_output_size(self, input, output):
+  #   print(f"{output.data.numel() / output.data.shape[0]}")
+
+  # def register_hooks(module):
+  #   for name, layer in module.named_children():
+  #       if isinstance(layer, nn.Conv2d):
+  #         layer.register_forward_hook(print_output_size)
+  #       register_hooks(layer)
+  
+  # register_hooks(net)
+  # images, targets = next(iter(run_config.train_loader))
+  # output = net(images)
+  ##### Test weight size and output size #####
   
   if args.train_first_conv == True:
     net.first_conv.conv.weight.requires_grad = True
@@ -349,6 +368,10 @@ if __name__ == '__main__':
       for layer_num in args.trainable_block:
           if args.trainable_layers == 'first':
             net.blocks[layer_num].conv.main_branch.inverted_bottleneck.conv.weight.requires_grad = True
+          elif args.trainable_layers == 'no_dw':
+            net.blocks[layer_num].conv.main_branch.inverted_bottleneck.conv.weight.requires_grad = True
+            net.blocks[layer_num].conv.main_branch.depth_conv.conv.weight.requires_grad = False
+            net.blocks[layer_num].conv.main_branch.point_linear.conv.weight.requires_grad = True
           elif args.trainable_layers == 'all':
             net.blocks[layer_num].conv.main_branch.inverted_bottleneck.conv.weight.requires_grad = True
             net.blocks[layer_num].conv.main_branch.depth_conv.conv.weight.requires_grad = True
@@ -357,6 +380,10 @@ if __name__ == '__main__':
       for layer_num in args.trainable_blocks:
         if args.trainable_layers == 'first':
           net.blocks[layer_num].mobile_inverted_conv.inverted_bottleneck.conv.weight.requires_grad = True
+        elif args.trainable_layers == 'no_dw':
+          net.blocks[layer_num].mobile_inverted_conv.inverted_bottleneck.conv.weight.requires_grad = True
+          net.blocks[layer_num].mobile_inverted_conv.depth_conv.conv.weight.requires_grad = False
+          net.blocks[layer_num].mobile_inverted_conv.point_linear.conv.weight.requires_grad = True
         elif args.trainable_layers == 'all':
           net.blocks[layer_num].mobile_inverted_conv.inverted_bottleneck.conv.weight.requires_grad = True
           net.blocks[layer_num].mobile_inverted_conv.depth_conv.conv.weight.requires_grad = True
@@ -378,8 +405,8 @@ if __name__ == '__main__':
       replace_conv2d_with_my_conv2d(net, args.ws_eps)
   
   # ZO estimator
-  if args.ZO_Estim.en is True:
-    ZO_Estim = build_ZO_Estim(args.ZO_Estim, model=net)
+  if args.ZO_Estim.en:
+    ZO_Estim = build_ZO_Estim(args.ZO_Estim, model=net, )
   else:
     ZO_Estim = None
 

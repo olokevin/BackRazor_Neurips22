@@ -13,6 +13,14 @@ from .QMC_sampler import sphere_n, coord_basis, block_mask_generator, layer_mask
 DEBUG=False
 # DEBUG=True
 
+def create_fwd_hook_add_perturbation(perturbation):
+    def fwd_hook(module, input, output):
+        # input is a tuple
+        module.in_value = input[0].detach().clone()
+        # output is a tensor
+        output += perturbation
+    return fwd_hook
+
 class ZO_Estim_MC(nn.Module):
     """
     Args:
@@ -38,6 +46,10 @@ class ZO_Estim_MC(nn.Module):
         estimate_method: str = 'forward',
         sample_method: str = 'gaussian',
         normalize_perturbation: bool = False,
+
+        get_iterable_block_name: Callable = None,
+        pre_block_forward:  Callable = None,
+        post_block_forward:  Callable = None
         ):
         super().__init__()
 
@@ -56,10 +68,16 @@ class ZO_Estim_MC(nn.Module):
         self.quantized = quantized
         self.estimate_method = estimate_method
         self.sample_method = sample_method
-
         self.normalize_perturbation = normalize_perturbation
 
-        self.device = next(self.model.parameters()).device
+        self.get_iterable_block_name = get_iterable_block_name
+        self.pre_block_forward = pre_block_forward
+        self.post_block_forward = post_block_forward
+
+        if torch.cuda.is_available():
+            self.device = torch.device("cuda:0")
+        else:
+            self.device = torch.device("cpu")
         
         self.forward_counter = 0
     
@@ -167,8 +185,7 @@ class ZO_Estim_MC(nn.Module):
         param_ZO_grad = param_ZO_grad.view(param_shape)
         return param_ZO_grad
     
-    def get_param_ZO_gradient(self):
-        outputs, old_loss = self.obj_fn()
+    def get_param_ZO_gradient(self, old_loss):
 
         for splited_param in self.splited_param_list:
             block_in = self.obj_fn(ending_idx=splited_param.idx, return_loss_reduction='no_loss')
@@ -176,20 +193,18 @@ class ZO_Estim_MC(nn.Module):
             param_ZO_grad = self.get_single_param_ZO_gradient(splited_param, block_in, old_loss, self.sigma, self.estimate_method, self.sample_method)
                 
             splited_param.param.grad = param_ZO_grad
+        
     
-    def get_actv_ZO_gradient(self):
-        _, old_loss = self.obj_fn(return_loss_reduction='none')
+    def get_actv_ZO_gradient(self, old_loss):
 
         ### Generate random perturbation with the same shape as the parameter
         ### Add perturbation to the parameter
         ### Estimate gradient
 
         for splited_layer in self.splited_layer_list:
-            assert hasattr(splited_layer.layer, 'perturb_forward_flag')
-
             block_in = self.obj_fn(ending_idx=splited_layer.idx, return_loss_reduction='no_loss')
 
-            post_actv_shape = splited_layer.layer.get_output_shape()
+            post_actv_shape = splited_layer.layer.output_shape
             batch_sz = post_actv_shape[0]
             mask = torch.ones(post_actv_shape, device=self.device)
 
@@ -226,24 +241,37 @@ class ZO_Estim_MC(nn.Module):
                         u = mask * self._generate_random_vector(post_actv_shape, self.sample_method, self.device)    
 
                 ### Add perturbation to the parameter
-                splited_layer.layer.en_perturb_forward(u * self.sigma)
-                # splited_layer.layer.en_perturb_forward(u / torch.linalg.vector_norm(u) * self.sigma)
+                # splited_layer.layer.en_perturb_forward(u * self.sigma)
+                fwd_hook_add_perturbation = create_fwd_hook_add_perturbation(u * self.sigma)
+                fwd_hook_handle = splited_layer.layer.register_forward_hook(fwd_hook_add_perturbation)
+  
                 _, pos_loss = self.obj_fn(starting_idx=splited_layer.idx, input=block_in, return_loss_reduction='none')
+
+                fwd_hook_handle.remove()
                 self.forward_counter += 1
 
                 ### Estimate gradient
                 if self.estimate_method == 'forward':
-                    # ZO_grad += (pos_loss - old_loss).view(-1,1) / self.sigma * u
-                    ZO_grad += torch.einsum('i,i...->i...', ((pos_loss - old_loss) / self.sigma, u))
+                    if batch_sz == 1:
+                        ZO_grad += (pos_loss - old_loss) / self.sigma * u
+                    else:
+                        ZO_grad += torch.einsum('i,i...->i...', ((pos_loss - old_loss) / self.sigma, u))
 
                 elif self.estimate_method == 'antithetic':
-                    splited_layer.layer.en_perturb_forward( - u * self.sigma)
-                    # splited_layer.layer.en_perturb_forward( - u / torch.linalg.vector_norm(u) * self.sigma)
+                    ### Add perturbation to the parameter
+                    # splited_layer.layer.en_perturb_forward( - u * self.sigma)
+                    fwd_hook_add_perturbation = create_fwd_hook_add_perturbation(- u * self.sigma)
+                    fwd_hook_handle = splited_layer.layer.register_forward_hook(fwd_hook_add_perturbation)
+
                     _, neg_loss = self.obj_fn(starting_idx=splited_layer.idx, input=block_in, return_loss_reduction='none')
+
+                    fwd_hook_handle.remove()
                     self.forward_counter += 1
                     
-                    # ZO_grad += (pos_loss - neg_loss) / 2.0 / self.sigma * u
-                    ZO_grad += torch.einsum('i,i...->i...', ((pos_loss - neg_loss) / 2.0 / self.sigma, u))
+                    if batch_sz == 1:
+                        ZO_grad += (pos_loss - neg_loss) / 2.0 / self.sigma * u
+                    else:
+                        ZO_grad += torch.einsum('i,i...->i...', ((pos_loss - neg_loss) / 2.0 / self.sigma, u))
 
             if self.sample_method == 'coord_basis':
                 ZO_grad = (ZO_grad / batch_sz).view(post_actv_shape)
@@ -251,21 +279,26 @@ class ZO_Estim_MC(nn.Module):
                 ZO_grad = (ZO_grad / self.n_sample / batch_sz).view(post_actv_shape)
 
             ### Apply estimated gradient
-            # if type(splited_layer) == nn.Linear:
-            #     pre_activ = splited_layer.layer.pre_actv
-            #     splited_layer.layer.adapter_up.weight.grad = torch.matmul(ZO_grad.T, pre_activ)
-            #     splited_layer.layer.adapter_up.bias.grad = torch.sum(ZO_grad, dim=0)
-            # else:
-            #     splited_layer.layer.local_backward(ZO_grad) 
+            if type(splited_layer.layer) == nn.Linear:
+                splited_layer.layer.weight.grad = torch.matmul(ZO_grad.T, splited_layer.layer.in_value)
+                splited_layer.layer.bias.grad = torch.sum(ZO_grad, dim=0)
+            elif type(splited_layer.layer) == nn.Conv2d:
+                pass
+                # splited_layer.layer.weight.grad = torch.nn.grad.conv2d_weight(splited_layer.layer.in_value, splited_layer.layer.weight.shape, ZO_grad,
+                #                                     stride=splited_layer.layer.stride, padding=splited_layer.layer.padding,
+                #                                     dilation=splited_layer.layer.dilation, groups=splited_layer.layer.groups)
+                # splited_layer.layer.bias.grad = ZO_grad.sum([0, 2, 3])
+            else:
+                splited_layer.layer.local_backward(ZO_grad) 
 
             ### Apply true FO_grad_output
             # FO_grad = splited_layer.layer.adapter_down.out_grad[0]
             # splited_layer.layer.local_backward(FO_grad)
         
             ### Apply estimated gradient
-            splited_layer.layer.local_backward(ZO_grad)     
-            
-            splited_layer.layer.disable_perturb_forward() 
+            # splited_layer.layer.local_backward(ZO_grad)     
+            # splited_layer.layer.disable_perturb_forward() 
+        
 
 
     def update_obj_fn(self, obj_fn):
@@ -277,11 +310,13 @@ class ZO_Estim_MC(nn.Module):
     def estimate_grad(self):
         
         # self.model.zero_grad()
+
+        output, old_loss = self.obj_fn(return_loss_reduction='none')
         
         if self.splited_layer_list is not None:
-            self.get_actv_ZO_gradient()
+            self.get_actv_ZO_gradient(old_loss=old_loss)
         
         if self.splited_param_list is not None:
-            self.get_param_ZO_gradient()
+            self.get_param_ZO_gradient(old_loss=old_loss.mean())
         
-        # return outputs, old_loss, self.estim_grads
+        return output, old_loss.mean()

@@ -4,21 +4,29 @@ dataset: car
 #     'food101', 'cub200', 'pets',
 #     'cifar10', 'cifar100', 'ImageNet',])
 train_batch_size: 8
+# train_batch_size: 1
 
 n_epochs: 100
 init_lr: 0.0003
-opt_type: sgd
+opt_type: adam
+label_smoothing: 0
 
-validation_frequency: 10
+validation_frequency: 5
 
 # net: proxyless_mobile
 # origin_network: false
 # weight_quantization: false
 # weight_standardization: true
 
-net: mcunet-in1
+# net: mcunet-in1
+# image_size: 128
 # pretrain_model_path: '/home/zyq123/Project/Edge/BackRazor_Neurips22/assets/mcunet_in1@ws+gn.pth.tar'
+
+net: mcunet-in2
+image_size: 160
+
 # net: mcunet-in4
+# image_size: 160
 # pretrain_model_path: '/home/zyq123/Project/Edge/BackRazor_Neurips22/assets/mcunet_in4@ws+gn.pth.tar'
 
 ###### origin_network: false -> replace BN with GN ######
@@ -26,16 +34,16 @@ net: mcunet-in1
 # weight_standardization: true
 
 ###### origin_network: true, replace_norm_layer=null -> original network with BN/GN ######
-origin_network: true
-replace_norm_layer: null
-weight_standardization: false
+# origin_network: true
+# replace_norm_layer: null
+# weight_standardization: false
 
 # fix_bn_stat: true
 
 ###### origin_network: true, replace_norm_layer choices=[null, 'fuse_bn', 'fuse_bn_add_gn', 'replace_bn_with_insn']) ######
-# origin_network: true
-# replace_norm_layer: fuse_bn
-# weight_standardization: false
+origin_network: true
+replace_norm_layer: fuse_bn
+weight_standardization: false
 
 # origin_network: true
 # replace_norm_layer: fuse_bn_add_gn
@@ -47,12 +55,11 @@ weight_standardization: false
 # weight_standardization: false
 
 weight_quantization: false
-image_size: 128
 
 # transfer_learning_method: 'full'
 # transfer_learning_method: 'full_noBN'
-transfer_learning_method: 'bn+last'
-# transfer_learning_method: 'last'
+# transfer_learning_method: 'bn+last'
+transfer_learning_method: 'last'
 
 # choices=[
 #   'full', 'full_noBN', 'bn+last', 'last',
@@ -60,56 +67,52 @@ transfer_learning_method: 'bn+last'
 
 # train_first_conv: true
 
+# trainable_blocks: [-1,-2,-3,-4,-6,-7]
 trainable_blocks: [-1,-2,-3,-4,-6,-7]
 trainable_layers: 'first'
 
 # trainable_blocks: [-2,-1]
 # trainable_layers: 'all'
 
-# trainable_blocks: [-1,-2,-3,-4,-5,-6,-7]
+# trainable_blocks: [-1,-2,-3,-4,-6,-7]
+# trainable_layers: 'no_dw'
+
+# trainable_blocks: [-1,-2,-3,-4,-6,-7]
 # trainable_layers: 'all'
 
-# origin_network: false -> replace BN with GN
-# origin_network: true
-# weight_quantization: false
-# weight_standardization: true
+grad_output_prune_ratio: 0.8
 
 ZO_Estim:
   ####### ZO_Estim_MC #######
   # en: True
   name: ZO_Estim_MC
   sigma: 0.01
-  n_sample: 10
+  n_sample: 1
   signSGD: False
 
-  trainable_param_list: all
+  # actv_perturb_layer_list: null
+  actv_perturb_layer_list: ['inverted_bottleneck.conv',]
+  # actv_perturb_layer_list: ['inverted_bottleneck.conv', 'point_linear.conv']
+  # actv_perturb_block_idx_list: all
+  actv_perturb_block_idx_list: [-2,]
 
-  trainable_layer_list: all
-
-  quantize_method: None
-
-  mask_method: None
-  # mask_method: block-10
-  # mask_method: layer
-
-  estimate_method: forward
-  # estimate_method: antithetic
+  param_perturb_param_list: null
+  # param_perturb_param_list: ['adapter_down.weight','adapter_up.weight']
+  # param_perturb_block_idx_list: all
+  # param_perturb_param_list: ['adapter_up.weight']
+  # param_perturb_block_idx_list: [8,]
 
   # obj_fn_type: classifier
-  # perturb_method: batch
-
   obj_fn_type: classifier_layerwise
-  perturb_method: activation
 
-  # obj_fn_type: classifier_row
-  # perturb_method: single
+  quantized: False
+
+  # estimate_method: forward
+  estimate_method: antithetic
 
   # sample_method: uniform
-  # sample_method: gaussian
+  sample_method: gaussian
   # sample_method: bernoulli
-  sample_method: coord_basis
+  # sample_method: coord_basis
 
-  prior_method: None
-  # prior_method: last_grad_perturb
-  # prior_method: mov_avg_perturb
-  # prior_method: last_grad_neighbor
+  normalize_perturbation: True

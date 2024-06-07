@@ -33,6 +33,14 @@ from ZO_Estim.ZO_Estim_entry import build_obj_fn
 
 __all__ = ["RunManager"]
 
+def fwd_hook_save_value(module, input, output):
+    module.in_value = input[0].detach().clone()
+    module.out_value = output.detach().clone()
+
+def bwd_hook_save_grad(module, grad_input, grad_output):
+    module.in_grad = grad_input[0].detach().clone()
+    module.out_grad = grad_output[0].detach().clone()
+
 
 class RunManager:
     def __init__(
@@ -369,10 +377,6 @@ class RunManager:
                         soft_logits = args.teacher_model(images).detach()
                         soft_label = F.softmax(soft_logits, dim=1)
 
-                # compute output
-                output = self.net(images)
-                loss = self.train_criterion(output, labels)
-
                 if args.teacher_model is None:
                     loss_type = "ce"
                 else:
@@ -385,16 +389,119 @@ class RunManager:
                     loss = args.kd_ratio * kd_loss + loss
                     loss_type = "%.1fkd+ce" % args.kd_ratio
 
-                # compute gradient and do SGD step
-                # self.net.zero_grad()  # or self.optimizer.zero_grad()
-                loss.backward()
+                if self.ZO_Estim is None:
+                    # compute output
+                    output = self.net(images)
+                    loss = self.train_criterion(output, labels)
+                    # compute gradient
+                    # self.net.zero_grad()  # or self.optimizer.zero_grad()
+                    loss.backward()
 
-                if self.ZO_Estim is not None:
-                    obj_fn = build_obj_fn(self.ZO_Estim.obj_fn_type, data=images, target=labels, model=self.net, criterion=self.criterion)
-                    self.ZO_Estim.update_obj_fn(obj_fn)
-                    outputs, loss, grads = self.ZO_Estim.estimate_grad()
-                    self.ZO_Estim.update_grad()
+                    if self.run_config.grad_output_prune_ratio is not None:
+                        grad_output_prune_ratio = self.run_config.grad_output_prune_ratio
+                        for layer_num in self.run_config.trainable_blocks:
+                            
+                            dw_channelwise = self.network.blocks[layer_num].mobile_inverted_conv.depth_conv.conv.weight.abs().sum([1,2,3])
+                            topk_dim = int((1.0-grad_output_prune_ratio) * dw_channelwise.numel())
+                            _, indices = torch.topk(dw_channelwise, topk_dim)
 
+                            pw1_grad_w = self.network.blocks[layer_num].mobile_inverted_conv.inverted_bottleneck.conv.weight.grad
+
+                            pruned_pw1_grad_w = torch.zeros_like(pw1_grad_w)
+                            for index in indices:
+                                pruned_pw1_grad_w[index] = pw1_grad_w.data[index]
+                            
+                            self.network.blocks[layer_num].mobile_inverted_conv.inverted_bottleneck.conv.weight.grad.data = pruned_pw1_grad_w
+                            # print(layer_num)
+
+                else:
+                    ##### Test #####
+                    if args.debug:
+                        """
+                            ##### save input/output value & grad #####
+                        """
+                        block_idx = -2
+
+                        layer = self.network.blocks[block_idx].mobile_inverted_conv
+
+                        hook_handle_list = []
+                        hook_handle_list.append(layer.inverted_bottleneck.register_forward_hook(fwd_hook_save_value))
+                        hook_handle_list.append(layer.inverted_bottleneck.register_full_backward_hook(bwd_hook_save_grad))
+                        hook_handle_list.append(layer.depth_conv.register_forward_hook(fwd_hook_save_value))
+                        hook_handle_list.append(layer.depth_conv.register_full_backward_hook(bwd_hook_save_grad))
+                        hook_handle_list.append(layer.point_linear.register_forward_hook(fwd_hook_save_value))
+                        hook_handle_list.append(layer.point_linear.register_full_backward_hook(bwd_hook_save_grad))
+                        
+                        output = self.net(images)
+                        loss = self.train_criterion(output, labels)
+                        loss.backward()  
+
+                        pw1_w_grad = self.network.blocks[block_idx].mobile_inverted_conv.inverted_bottleneck.conv.weight.grad.data
+                        pw1_in_grad = self.network.blocks[block_idx].mobile_inverted_conv.inverted_bottleneck.in_grad
+                        pw1_out_grad = self.network.blocks[block_idx].mobile_inverted_conv.inverted_bottleneck.out_grad
+                      
+                        pw1_in_value = self.network.blocks[block_idx].mobile_inverted_conv.inverted_bottleneck.in_value
+                        pw1_out_value = self.network.blocks[block_idx].mobile_inverted_conv.inverted_bottleneck.out_value
+
+                        dw_w = self.network.blocks[block_idx].mobile_inverted_conv.depth_conv.conv.weight.data
+                        pw2_w = self.network.blocks[block_idx].mobile_inverted_conv.point_linear.conv.weight.data
+                        dw_out_grad = self.network.blocks[block_idx].mobile_inverted_conv.depth_conv.out_grad
+                        pw2_out_grad = self.network.blocks[block_idx].mobile_inverted_conv.point_linear.out_grad
+
+                        torch.save((pw1_w_grad, pw1_in_grad, pw1_out_grad, pw1_in_value, pw1_out_value, dw_w, dw_out_grad, pw2_w, pw2_out_grad), f'./temp/debug_data_{block_idx}.pt')
+
+                        for hook_handle in hook_handle_list:
+                            hook_handle.remove()
+                        """
+                            ##### save input/output value & grad #####
+                        """
+
+                        output = self.net(images)
+                        loss = self.train_criterion(output, labels)
+                        loss.backward() 
+
+                        try:
+                            block_idx = args.ZO_Estim.param_perturb_block_idx_list[-1]
+                        except:
+                            try:
+                                block_idx = args.ZO_Estim.actv_perturb_block_idx_list[-1]
+                            except:
+                                block_idx = -1
+                        
+                        from ZO_Estim.ZO_utils import SplitedLayer
+                        splited_layer = SplitedLayer(idx=block_idx, name=f'blocks.{block_idx}.adapter_mlp', layer=self.network.blocks[block_idx].mobile_inverted_conv.inverted_bottleneck.conv)
+
+                        # FO_grad = splited_layer.layer.out_grad[0].data
+                        FO_adapter_up_grad_w = splited_layer.layer.weight.grad.data
+                    ##### Test #####
+
+                    obj_fn_type = self.ZO_Estim.obj_fn_type
+                    kwargs = {}
+                    if obj_fn_type == 'classifier_layerwise':
+                        kwargs = {'get_iterable_block_name': self.ZO_Estim.get_iterable_block_name, "pre_block_forward": self.ZO_Estim.pre_block_forward, "post_block_forward": self.ZO_Estim.post_block_forward}
+                    with torch.no_grad():
+                        output = self.net(images)
+                        loss = self.train_criterion(output, labels)
+                        obj_fn = build_obj_fn(obj_fn_type, data=images, target=labels, model=self.network, criterion=self.train_criterion, **kwargs)
+                        self.ZO_Estim.update_obj_fn(obj_fn)
+                        output, loss = self.ZO_Estim.estimate_grad()
+                    
+                    if args.debug:
+                        # ZO_grad = splited_layer.layer.out_grad[0].data
+                        ZO_adapter_up_grad_w = splited_layer.layer.weight.grad.data
+
+                        # print('\n Grad output')
+                        # print('cos sim grad_output', F.cosine_similarity(FO_grad.view(-1), ZO_grad.view(-1), dim=0))
+                        # print('FO_grad:', torch.linalg.norm(FO_grad))
+                        # print('ZO_grad:', torch.linalg.norm(ZO_grad))
+
+                        print('Adapter_up')
+                        print(f'weight cos sim {F.cosine_similarity(FO_adapter_up_grad_w.view(-1), ZO_adapter_up_grad_w.view(-1), dim=0)}')
+                        print(f'FO_weight_grad norm: {torch.linalg.norm(FO_adapter_up_grad_w)}')
+                        print(f'ZO_weight_grad norm: {torch.linalg.norm(ZO_adapter_up_grad_w)}')
+                        print(f'ZO/FO:  {torch.linalg.norm(ZO_adapter_up_grad_w)/torch.linalg.norm(FO_adapter_up_grad_w)}')
+
+                # do SGD step
                 if self.run_config.grad_accumulation_steps > 1:
                     # The gradients are computed for each mini-batch by calling loss.backward(). 
                     # This adds the gradients to the existing values instead of replacing them.

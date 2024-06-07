@@ -21,14 +21,14 @@ def split_model(model, iterable_block_name=None):
     # full model split
     if iterable_block_name is None:
         for m in model.children():
-            if isinstance(m, (torch.nn.Sequential,)):
+            if isinstance(m, (torch.nn.Sequential, torch.nn.ModuleList)):
                 modules += split_model(m)
             else:
                 modules.append(m)
     # only split iterable block
     else:
         iterable_block = getattr(model, iterable_block_name)
-        assert isinstance(iterable_block, torch.nn.Sequential)
+        assert isinstance(iterable_block, (torch.nn.Sequential, torch.nn.ModuleList))
         for m in iterable_block.children():
             modules.append(m)
     return modules
@@ -37,8 +37,10 @@ def split_named_model(model, parent_name=''):
     named_modules = {}
     for name, module in model.named_children():
     # for name, module in model.named_modules():    # Error: non-stop recursion
-        if isinstance(module, torch.nn.Sequential):
+        if isinstance(module, (torch.nn.Sequential, torch.nn.ModuleList)):
             named_modules.update(split_named_model(module, parent_name + name + '.'))
+        # elif hasattr(module, 'conv') and isinstance(module.conv, torch.nn.Sequential):
+        #     named_modules.update(split_named_model(module.conv, parent_name + name + '.conv.'))
         else:
             named_modules[parent_name + name] = module
     return named_modules
