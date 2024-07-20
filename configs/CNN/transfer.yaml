@@ -1,29 +1,55 @@
-dataset: car
-# choices=[
-#     'aircraft', 'car', 'flowers102',
-#     'food101', 'cub200', 'pets',
-#     'cifar10', 'cifar100', 'ImageNet',])
-train_batch_size: 8
-# train_batch_size: 1
+##### dataset config #####
+# dataset: car
+# # choices=[
+# #     'aircraft', 'car', 'flowers102',
+# #     'food101', 'cub200', 'pets',
+# #     'cifar10', 'cifar100', 'ImageNet',
+# #     'cifar10-c', 'ImageNet-c'])
+# train_batch_size: 8
+# # train_batch_size: 1
+# n_epochs: 100
+# init_lr: 0.0003
+# opt_type: adam
 
-n_epochs: 100
-init_lr: 0.0003
+# dataset: cifar10-c
+# corruption_type: frost
+# # corruption_type: [frost,gaussian_blur,gaussian_noise,glass_blur,impulse_noise,jpeg_compression,motion_blur,pixelate,saturate,shot_noise,snow,spatter,speckle_noise,zoom_blur]
+# severity: 5
+# train_n: 1000
+# train_batch_size: 64
+# # train_batch_size: 1
+# n_epochs: 15
+# init_lr: 0.0001
+# opt_type: adam
+# init_new_head: false
+
+dataset: imagenet-c
+corruption_type: brightness
+# corruption_type: [brightness,contrast,defocus_blur,elastic_transform,fog,frost,gaussian_noise,glass_blur,impulse_noise,jpeg_compression,motion_blur,pixelate,shot_noise,snow,zoom_blur]
+severity: 5
+train_n: 5000
+# train_batch_size: 64
+train_batch_size: 1
+n_epochs: 10
+init_lr: 0.001
 opt_type: adam
+init_new_head: false
+
+##### RunConfig #####
 label_smoothing: 0
+validation_frequency: 10
 
-validation_frequency: 5
-
-# net: proxyless_mobile
-# origin_network: false
-# weight_quantization: false
-# weight_standardization: true
+##### Network config #####
+net: proxyless_mobile
+origin_network: false
+weight_standardization: true
 
 # net: mcunet-in1
 # image_size: 128
 # pretrain_model_path: '/home/zyq123/Project/Edge/BackRazor_Neurips22/assets/mcunet_in1@ws+gn.pth.tar'
 
-net: mcunet-in2
-image_size: 160
+# net: mcunet-in2
+# image_size: 160
 
 # net: mcunet-in4
 # image_size: 160
@@ -41,9 +67,9 @@ image_size: 160
 # fix_bn_stat: true
 
 ###### origin_network: true, replace_norm_layer choices=[null, 'fuse_bn', 'fuse_bn_add_gn', 'replace_bn_with_insn']) ######
-origin_network: true
-replace_norm_layer: fuse_bn
-weight_standardization: false
+# origin_network: true
+# replace_norm_layer: fuse_bn
+# weight_standardization: false
 
 # origin_network: true
 # replace_norm_layer: fuse_bn_add_gn
@@ -54,34 +80,34 @@ weight_standardization: false
 # replace_norm_layer: replace_bn_with_insn
 # weight_standardization: false
 
+##### Quantization config. default: true #####
 weight_quantization: false
+
+##### Transfer learning config #####
 
 # transfer_learning_method: 'full'
 # transfer_learning_method: 'full_noBN'
 # transfer_learning_method: 'bn+last'
-transfer_learning_method: 'last'
-
-# choices=[
-#   'full', 'full_noBN', 'bn+last', 'last',
-#   'tinytl-bias', 'tinytl-lite_residual', 'tinytl-lite_residual+bias'])
+# transfer_learning_method: 'last'
+transfer_learning_method: 'bn_only'
+# transfer_learning_method: 'customize'
 
 # train_first_conv: true
 
-# trainable_blocks: [-1,-2,-3,-4,-6,-7]
-trainable_blocks: [-1,-2,-3,-4,-6,-7]
-trainable_layers: 'first'
-
+# trainable_blocks: [1,2]
+# trainable_blocks: [1,2,5,6]
 # trainable_blocks: [-2,-1]
-# trainable_layers: 'all'
+# trainable_blocks: [-1,-4,-6,-7]
+# trainable_blocks: [-1,-2,-4,-5,-6,-7]
+# trainable_blocks: [-1,-2,-3,-4,-5,-6,-7,-8]
 
-# trainable_blocks: [-1,-2,-3,-4,-6,-7]
+# trainable_layers: 'first'
 # trainable_layers: 'no_dw'
+trainable_layers: 'all'
 
-# trainable_blocks: [-1,-2,-3,-4,-6,-7]
-# trainable_layers: 'all'
+# grad_output_prune_ratio: 0.8
 
-grad_output_prune_ratio: 0.8
-
+##### Zeroth-Order config #####
 ZO_Estim:
   ####### ZO_Estim_MC #######
   # en: True

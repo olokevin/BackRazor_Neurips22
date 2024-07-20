@@ -176,6 +176,7 @@ if __name__ == '__main__':
   args.enable_bias_update = False
   args.enable_lite_residual = False
   args.disable_bn_update = False
+  args.disable_head_update = False
   if args.transfer_learning_method == 'full':
     args.enable_feature_extractor_update = True
   elif args.transfer_learning_method == 'full_noBN':
@@ -185,6 +186,12 @@ if __name__ == '__main__':
     args.enable_bn_update = True
   elif args.transfer_learning_method == 'last':
     pass
+  elif args.transfer_learning_method == 'bn_only':
+    args.enable_bn_update = True
+    args.disable_head_update = True
+  elif args.transfer_learning_method == 'customize':
+    args.disable_bn_update = True
+    args.disable_head_update = True
   elif args.transfer_learning_method == 'tinytl-bias':
     args.enable_bias_update = True
   elif args.transfer_learning_method == 'tinytl-lite_residual':
@@ -246,7 +253,7 @@ if __name__ == '__main__':
       # classification_head.append(net.classifier)
       # init_models(classification_head)
     else:
-      if args.eval_only:
+      if args.eval_only or args.init_new_head==False:
         pass
       else:
         net.classifier = LinearLayer(net.classifier.in_features, run_config.data_provider.n_classes, dropout_rate=args.dropout)
@@ -289,7 +296,7 @@ if __name__ == '__main__':
     if args.pretrain_model_path is not None:
       net.load_state_dict(torch.load(args.pretrain_model_path, map_location='cpu')['state_dict'])
     
-    if args.eval_only:
+    if args.eval_only or args.init_new_head==False:
       run_config.data_provider.assign_active_img_size(image_size)
     else:
       net.classifier = LinearLayer(net.classifier.in_features, run_config.data_provider.n_classes, dropout_rate=args.dropout)
@@ -320,11 +327,14 @@ if __name__ == '__main__':
   # set transfer learning configs
   set_module_grad_status(net, args.enable_feature_extractor_update)
   set_module_grad_status(classification_head, True)
+
   if args.enable_bn_update:
     enable_bn_update(net)
   if args.disable_bn_update:
     assert not args.enable_bn_update
     disable_bn_update(net)
+  if args.disable_head_update:
+    set_module_grad_status(classification_head, False)
   if args.enable_bias_update:
     enable_bias_update(net)
   if args.enable_lite_residual:
@@ -362,10 +372,17 @@ if __name__ == '__main__':
     if hasattr(net.first_conv, 'bn'):
       net.first_conv.bn.weight.requires_grad = True
       net.first_conv.bn.bias.requires_grad = True
+    
+    if args.net == 'proxyless_mobile':
+      net.blocks[0].conv.depth_conv.conv.weight.requires_grad = True
+      net.blocks[0].conv.point_linear.conv.weight.requires_grad = True
+    elif 'mcunet' in args.net:
+      net.blocks[0].mobile_inverted_conv.depth_conv.conv.weight.requires_grad = True
+      net.blocks[0].mobile_inverted_conv.point_linear.conv.weight.requires_grad = True
   
   if args.trainable_blocks is not None and args.trainable_layers is not None:
     if args.net == 'proxyless_mobile':
-      for layer_num in args.trainable_block:
+      for layer_num in args.trainable_blocks:
           if args.trainable_layers == 'first':
             net.blocks[layer_num].conv.main_branch.inverted_bottleneck.conv.weight.requires_grad = True
           elif args.trainable_layers == 'no_dw':

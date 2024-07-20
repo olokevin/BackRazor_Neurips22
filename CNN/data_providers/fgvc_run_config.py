@@ -2,7 +2,7 @@ from ofa.imagenet_classification.run_manager import ImagenetRunConfig
 
 from .fgvc_data_providers import AircraftDataProvider, Flowers102DataProvider, CarDataProvider
 from .fgvc_data_providers import Food101DataProvider, CUB200DataProvider, PetsDataProvider
-from .fgvc_data_providers import CIFAR10DataProvider, CIFAR100DataProvider, ImageNetDataProvider
+from .fgvc_data_providers import CIFAR10DataProvider, CIFAR100DataProvider, ImageNetDataProvider, CIFAR10_C_DataProvider, ImageNet_C_DataProvider
 
 __all__ = ['FGVCRunConfig']
 
@@ -27,34 +27,56 @@ class FGVCRunConfig(ImagenetRunConfig):
         self.grad_output_prune_ratio = kwargs['grad_output_prune_ratio']
         self.trainable_blocks = kwargs['trainable_blocks']
 
+        if self.dataset in (CIFAR10_C_DataProvider.name(), ImageNet_C_DataProvider.name()):
+            self.corruption_type = kwargs['corruption_type']
+            self.severity = kwargs['severity']
+            self.train_n = kwargs['train_n']
     @property
     def data_provider(self):
         if self.__dict__.get('_data_provider', None) is None:
-            if self.dataset == AircraftDataProvider.name():
-                DataProviderClass = AircraftDataProvider
-            elif self.dataset == Flowers102DataProvider.name():
-                DataProviderClass = Flowers102DataProvider
-            elif self.dataset == CarDataProvider.name():
-                DataProviderClass = CarDataProvider
-            elif self.dataset == Food101DataProvider.name():
-                DataProviderClass = Food101DataProvider
-            elif self.dataset == CUB200DataProvider.name():
-                DataProviderClass = CUB200DataProvider
-            elif self.dataset == PetsDataProvider.name():
-                DataProviderClass = PetsDataProvider
-            elif self.dataset == CIFAR10DataProvider.name():
-                DataProviderClass = CIFAR10DataProvider
-            elif self.dataset == CIFAR100DataProvider.name():
-                DataProviderClass = CIFAR100DataProvider
-            elif self.dataset == ImageNetDataProvider.name():
-                DataProviderClass = ImageNetDataProvider
+            if self.dataset == CIFAR10_C_DataProvider.name():
+                DataProviderClass = CIFAR10_C_DataProvider
+                self.__dict__['_data_provider'] = DataProviderClass(
+                    corruption_type=self.corruption_type, severity=self.severity, train_n=self.train_n,
+                    train_batch_size=self.train_batch_size, test_batch_size=self.test_batch_size,
+                    valid_size=self.valid_size, n_worker=self.n_worker, resize_scale=self.resize_scale,
+                    distort_color=self.distort_color, image_size=self.image_size,
+                )
+            elif self.dataset == ImageNet_C_DataProvider.name():
+                DataProviderClass = ImageNet_C_DataProvider 
+                self.__dict__['_data_provider'] = DataProviderClass(
+                    corruption_type=self.corruption_type, severity=self.severity, train_n=self.train_n,
+                    train_batch_size=self.train_batch_size, test_batch_size=self.test_batch_size,
+                    valid_size=self.valid_size, n_worker=self.n_worker, resize_scale=self.resize_scale,
+                    distort_color=self.distort_color, image_size=self.image_size,
+                )
             else:
-                raise ValueError('Do not support: %s' % self.dataset)
-            self.__dict__['_data_provider'] = DataProviderClass(
-                train_batch_size=self.train_batch_size, test_batch_size=self.test_batch_size,
-                valid_size=self.valid_size, n_worker=self.n_worker, resize_scale=self.resize_scale,
-                distort_color=self.distort_color, image_size=self.image_size,
-            )
+                if self.dataset == AircraftDataProvider.name():
+                    DataProviderClass = AircraftDataProvider
+                elif self.dataset == Flowers102DataProvider.name():
+                    DataProviderClass = Flowers102DataProvider
+                elif self.dataset == CarDataProvider.name():
+                    DataProviderClass = CarDataProvider
+                elif self.dataset == Food101DataProvider.name():
+                    DataProviderClass = Food101DataProvider
+                elif self.dataset == CUB200DataProvider.name():
+                    DataProviderClass = CUB200DataProvider
+                elif self.dataset == PetsDataProvider.name():
+                    DataProviderClass = PetsDataProvider
+                elif self.dataset == CIFAR10DataProvider.name():
+                    DataProviderClass = CIFAR10DataProvider
+                elif self.dataset == CIFAR100DataProvider.name():
+                    DataProviderClass = CIFAR100DataProvider
+                elif self.dataset == ImageNetDataProvider.name():
+                    DataProviderClass = ImageNetDataProvider
+                
+                else:
+                    raise ValueError('Do not support: %s' % self.dataset)
+                self.__dict__['_data_provider'] = DataProviderClass(
+                    train_batch_size=self.train_batch_size, test_batch_size=self.test_batch_size,
+                    valid_size=self.valid_size, n_worker=self.n_worker, resize_scale=self.resize_scale,
+                    distort_color=self.distort_color, image_size=self.image_size,
+                )
         return self.__dict__['_data_provider']
 
     @property

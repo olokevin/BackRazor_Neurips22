@@ -43,6 +43,7 @@ grad_accumulation_steps: 1
 ### net config ###
 net: 'proxyless_mobile'
 # choices=['proxyless_mobile', 'resnet', 'mcunet'])
+init_new_head: true
 dropout: 0.2
 ws_eps: 0.00001
 net_path: null

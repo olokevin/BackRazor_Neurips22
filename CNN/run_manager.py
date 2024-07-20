@@ -69,7 +69,7 @@ class RunManager:
 
         # net info
         net_info = get_net_info(
-            self.net, self.run_config.data_provider.data_shape, measure_latency, print_info=True
+            self.net, self.run_config.data_provider.data_shape, measure_latency, print_info=False
         )
         with open("%s/net_info.txt" % self.path, "w") as fout:
             fout.write(json.dumps(net_info, indent=4) + "\n")
@@ -389,6 +389,18 @@ class RunManager:
                     loss = args.kd_ratio * kd_loss + loss
                     loss_type = "%.1fkd+ce" % args.kd_ratio
 
+                if args.debug:
+                    ##### Add hook to save input/output value & grad #####
+                    hook_handle_list = []
+                    for block in self.network.blocks[1:]:
+                        layer = block.mobile_inverted_conv
+                        hook_handle_list.append(layer.inverted_bottleneck.register_forward_hook(fwd_hook_save_value))
+                        hook_handle_list.append(layer.inverted_bottleneck.register_full_backward_hook(bwd_hook_save_grad))
+                        hook_handle_list.append(layer.depth_conv.register_forward_hook(fwd_hook_save_value))
+                        hook_handle_list.append(layer.depth_conv.register_full_backward_hook(bwd_hook_save_grad))
+                        hook_handle_list.append(layer.point_linear.register_forward_hook(fwd_hook_save_value))
+                        hook_handle_list.append(layer.point_linear.register_full_backward_hook(bwd_hook_save_grad))
+                
                 if self.ZO_Estim is None:
                     # compute output
                     output = self.net(images)
@@ -397,69 +409,67 @@ class RunManager:
                     # self.net.zero_grad()  # or self.optimizer.zero_grad()
                     loss.backward()
 
-                    if self.run_config.grad_output_prune_ratio is not None:
-                        grad_output_prune_ratio = self.run_config.grad_output_prune_ratio
-                        for layer_num in self.run_config.trainable_blocks:
+                    if args.debug:
+                        ##### Residual gradient similarity #####
+                        last_block_out_grad = None
+                        cos_sim_log = ''
+                        block_idx_list = [-2, -3, -5, -6]
+                        for block_idx in block_idx_list:
+                            block_out_grad = self.network.blocks[block_idx].mobile_inverted_conv.point_linear.out_grad
+                            block_in_grad = self.network.blocks[block_idx-1].mobile_inverted_conv.point_linear.out_grad
                             
-                            dw_channelwise = self.network.blocks[layer_num].mobile_inverted_conv.depth_conv.conv.weight.abs().sum([1,2,3])
-                            topk_dim = int((1.0-grad_output_prune_ratio) * dw_channelwise.numel())
-                            _, indices = torch.topk(dw_channelwise, topk_dim)
+                            cos_sim = F.cosine_similarity(block_out_grad.view(-1), block_in_grad.view(-1), dim=0)
+                            cos_sim_log += f'block {block_idx}: {cos_sim}'
+                        
+                        self.write_log(cos_sim_log, prefix="cos_sim", should_print=False)
 
-                            pw1_grad_w = self.network.blocks[layer_num].mobile_inverted_conv.inverted_bottleneck.conv.weight.grad
+                        ##### save input/output value & grad #####
+                        # block_idx = -2
 
-                            pruned_pw1_grad_w = torch.zeros_like(pw1_grad_w)
-                            for index in indices:
-                                pruned_pw1_grad_w[index] = pw1_grad_w.data[index]
+                        # pw1_w_grad = self.network.blocks[block_idx].mobile_inverted_conv.inverted_bottleneck.conv.weight.grad.data
+                        # pw1_in_grad = self.network.blocks[block_idx].mobile_inverted_conv.inverted_bottleneck.in_grad
+                        # pw1_out_grad = self.network.blocks[block_idx].mobile_inverted_conv.inverted_bottleneck.out_grad
+                      
+                        # pw1_in_value = self.network.blocks[block_idx].mobile_inverted_conv.inverted_bottleneck.in_value
+                        # pw1_out_value = self.network.blocks[block_idx].mobile_inverted_conv.inverted_bottleneck.out_value
+
+                        # dw_w = self.network.blocks[block_idx].mobile_inverted_conv.depth_conv.conv.weight.data
+                        # pw2_w = self.network.blocks[block_idx].mobile_inverted_conv.point_linear.conv.weight.data
+                        # dw_out_grad = self.network.blocks[block_idx].mobile_inverted_conv.depth_conv.out_grad
+                        # pw2_out_grad = self.network.blocks[block_idx].mobile_inverted_conv.point_linear.out_grad
+
+                        # torch.save((pw1_w_grad, pw1_in_grad, pw1_out_grad, pw1_in_value, pw1_out_value, dw_w, dw_out_grad, pw2_w, pw2_out_grad), f'./temp/debug_data_{block_idx}.pt')
+                    
+                    """
+                         grad_output sparsity
+                    """
+                    # if self.run_config.grad_output_prune_ratio is not None:
+                    #     grad_output_prune_ratio = self.run_config.grad_output_prune_ratio
+                    #     for layer_num in self.run_config.trainable_blocks:
                             
-                            self.network.blocks[layer_num].mobile_inverted_conv.inverted_bottleneck.conv.weight.grad.data = pruned_pw1_grad_w
-                            # print(layer_num)
+                    #         dw_channelwise = self.network.blocks[layer_num].mobile_inverted_conv.depth_conv.conv.weight.abs().sum([1,2,3])
+                    #         topk_dim = int((1.0-grad_output_prune_ratio) * dw_channelwise.numel())
+                    #         _, indices = torch.topk(dw_channelwise, topk_dim)
+
+                    #         pw1_grad_w = self.network.blocks[layer_num].mobile_inverted_conv.inverted_bottleneck.conv.weight.grad
+
+                    #         pruned_pw1_grad_w = torch.zeros_like(pw1_grad_w)
+                    #         for index in indices:
+                    #             pruned_pw1_grad_w[index] = pw1_grad_w.data[index]
+                            
+                    #         mask = torch.zeros_like(pw1_grad_w, dtype=torch.bool)
+                            
+                    #         self.network.blocks[layer_num].mobile_inverted_conv.inverted_bottleneck.conv.weight.grad.data = pruned_pw1_grad_w
+                    #         # print(layer_num)
 
                 else:
                     ##### Test #####
                     if args.debug:
-                        """
-                            ##### save input/output value & grad #####
-                        """
-                        block_idx = -2
-
-                        layer = self.network.blocks[block_idx].mobile_inverted_conv
-
-                        hook_handle_list = []
-                        hook_handle_list.append(layer.inverted_bottleneck.register_forward_hook(fwd_hook_save_value))
-                        hook_handle_list.append(layer.inverted_bottleneck.register_full_backward_hook(bwd_hook_save_grad))
-                        hook_handle_list.append(layer.depth_conv.register_forward_hook(fwd_hook_save_value))
-                        hook_handle_list.append(layer.depth_conv.register_full_backward_hook(bwd_hook_save_grad))
-                        hook_handle_list.append(layer.point_linear.register_forward_hook(fwd_hook_save_value))
-                        hook_handle_list.append(layer.point_linear.register_full_backward_hook(bwd_hook_save_grad))
-                        
                         output = self.net(images)
                         loss = self.train_criterion(output, labels)
                         loss.backward()  
 
-                        pw1_w_grad = self.network.blocks[block_idx].mobile_inverted_conv.inverted_bottleneck.conv.weight.grad.data
-                        pw1_in_grad = self.network.blocks[block_idx].mobile_inverted_conv.inverted_bottleneck.in_grad
-                        pw1_out_grad = self.network.blocks[block_idx].mobile_inverted_conv.inverted_bottleneck.out_grad
-                      
-                        pw1_in_value = self.network.blocks[block_idx].mobile_inverted_conv.inverted_bottleneck.in_value
-                        pw1_out_value = self.network.blocks[block_idx].mobile_inverted_conv.inverted_bottleneck.out_value
-
-                        dw_w = self.network.blocks[block_idx].mobile_inverted_conv.depth_conv.conv.weight.data
-                        pw2_w = self.network.blocks[block_idx].mobile_inverted_conv.point_linear.conv.weight.data
-                        dw_out_grad = self.network.blocks[block_idx].mobile_inverted_conv.depth_conv.out_grad
-                        pw2_out_grad = self.network.blocks[block_idx].mobile_inverted_conv.point_linear.out_grad
-
-                        torch.save((pw1_w_grad, pw1_in_grad, pw1_out_grad, pw1_in_value, pw1_out_value, dw_w, dw_out_grad, pw2_w, pw2_out_grad), f'./temp/debug_data_{block_idx}.pt')
-
-                        for hook_handle in hook_handle_list:
-                            hook_handle.remove()
-                        """
-                            ##### save input/output value & grad #####
-                        """
-
-                        output = self.net(images)
-                        loss = self.train_criterion(output, labels)
-                        loss.backward() 
-
+                        ##### Save FO gradient
                         try:
                             block_idx = args.ZO_Estim.param_perturb_block_idx_list[-1]
                         except:
@@ -473,8 +483,8 @@ class RunManager:
 
                         # FO_grad = splited_layer.layer.out_grad[0].data
                         FO_adapter_up_grad_w = splited_layer.layer.weight.grad.data
-                    ##### Test #####
 
+                    ##### ZO gradient Estimation #####
                     obj_fn_type = self.ZO_Estim.obj_fn_type
                     kwargs = {}
                     if obj_fn_type == 'classifier_layerwise':
@@ -501,6 +511,11 @@ class RunManager:
                         print(f'ZO_weight_grad norm: {torch.linalg.norm(ZO_adapter_up_grad_w)}')
                         print(f'ZO/FO:  {torch.linalg.norm(ZO_adapter_up_grad_w)/torch.linalg.norm(FO_adapter_up_grad_w)}')
 
+                if args.debug:
+                    ##### Remove hook #####
+                    for hook_handle in hook_handle_list:
+                        hook_handle.remove()
+                
                 # do SGD step
                 if self.run_config.grad_accumulation_steps > 1:
                     # The gradients are computed for each mini-batch by calling loss.backward(). 

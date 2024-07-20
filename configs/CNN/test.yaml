@@ -18,8 +18,8 @@ net: mcunet-in1
 # pretrain_model_path: '/home/zyq123/Project/Edge/BackRazor_Neurips22/assets/mcunet_in4@ws+gn.pth.tar'
 
 ###### origin_network: false -> replace BN with GN ######
-# origin_network: false
-# weight_standardization: true
+origin_network: false
+weight_standardization: true
 
 ###### origin_network: true, replace_norm_layer=null -> original network with BN ######
 # origin_network: true
@@ -38,9 +38,9 @@ net: mcunet-in1
 # gn_channel_per_group: 8
 # weight_standardization: true
 
-origin_network: true
-replace_norm_layer: replace_bn_with_insn
-weight_standardization: false
+# origin_network: true
+# replace_norm_layer: replace_bn_with_insn
+# weight_standardization: false
 
 weight_quantization: false
 
