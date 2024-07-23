@@ -1,25 +1,34 @@
+project: test
+
 dataset: ImageNet
 # choices=[
 #     'aircraft', 'car', 'flowers102',
 #     'food101', 'cub200', 'pets',
 #     'cifar10', 'cifar100', 'ImageNet',])
+init_new_head: false
 
 n_epochs: 100
 init_lr: 0.0003
 
-# net: proxyless_mobile
-# origin_network: false
-# weight_quantization: false
-# weight_standardization: true
+net: proxyless_mobile
+image_size: 224
+### ws+gn
+origin_network: false
+weight_standardization: true
 
-net: mcunet-in1
+### bn
+# origin_network: true
+# weight_standardization: false
+# replace_norm_layer: fuse_bn
+
+# net: mcunet-in1
 # pretrain_model_path: '/home/zyq123/Project/Edge/BackRazor_Neurips22/assets/mcunet_in1@ws+gn.pth.tar'
 # net: mcunet-in4
 # pretrain_model_path: '/home/zyq123/Project/Edge/BackRazor_Neurips22/assets/mcunet_in4@ws+gn.pth.tar'
 
 ###### origin_network: false -> replace BN with GN ######
-origin_network: false
-weight_standardization: true
+# origin_network: false
+# weight_standardization: true
 
 ###### origin_network: true, replace_norm_layer=null -> original network with BN ######
 # origin_network: true

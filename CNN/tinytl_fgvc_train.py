@@ -47,6 +47,29 @@ from torchvision import datasets, transforms
 
 from ZO_Estim.ZO_Estim_entry import build_ZO_Estim
 
+import wandb
+def setup_wandb(cfg):
+    wandb.init(
+        # entity=cfg.user.wandb_id,
+        project=cfg.project,
+        settings=wandb.Settings(start_method="thread"),
+        # name=f'batch{cfg.train_batch_size}\
+        #       /{cfg.dataset}\
+        #       /{cfg.net}\
+        #       /{cfg.transfer_learning_method}\
+        #       /{os.getpid()}-' + time.strftime("%Y%m%d-%H%M%S")
+        name=time.strftime("%Y%m%d-%H%M%S")+f'-{os.getpid()}'
+    )
+    wandb.config.update(cfg, allow_val_change=True)
+
+    # define our custom x axis metric
+    wandb.define_metric("train/epoch")
+    # set all other train/ metrics to use this step
+    wandb.define_metric("train/*", step_metric="train/epoch")
+
+    wandb.define_metric("val/epoch")
+    wandb.define_metric("val/*", step_metric="val/epoch")
+
 parser = argparse.ArgumentParser()
 parser.add_argument('config', metavar='FILE', help='config file')
 parser.add_argument('--path', type=str, metavar='DIR', help='run directory')
@@ -170,6 +193,8 @@ if __name__ == '__main__':
   json.dump(args.__dict__, open(os.path.join(args.path, 'args.txt'), 'w'), indent=4)
   print(args)
 
+  setup_wandb(args)
+
   # setup transfer learning
   args.enable_feature_extractor_update = False
   args.enable_bn_update = False
@@ -226,6 +251,8 @@ if __name__ == '__main__':
   if args.net == 'proxyless_mobile':
     if args.origin_network:
       net = proxylessnas_mobile(pretrained=True)
+      if args.replace_norm_layer == 'fuse_bn':
+        fuse_bn(net)
     else:
       net = proxylessnas_mobile(pretrained=False)
       LiteResidualModule.insert_lite_residual(
@@ -279,6 +306,11 @@ if __name__ == '__main__':
   elif 'mcunet' in args.net:
     net, image_size, description = build_model(net_id=args.net, pretrained=args.pretrained)
 
+    if args.init_new_head:
+      net.classifier = LinearLayer(net.classifier.in_features, run_config.data_provider.n_classes, dropout_rate=args.dropout)
+      classification_head.append(net.classifier)
+      init_models(classification_head)
+
     # replace bn layers with gn layers
     if args.origin_network == False:
       replace_bn_with_gn(net, gn_channel_per_group=8)
@@ -294,14 +326,11 @@ if __name__ == '__main__':
     
     # load pretrained model
     if args.pretrain_model_path is not None:
-      net.load_state_dict(torch.load(args.pretrain_model_path, map_location='cpu')['state_dict'])
-    
-    if args.eval_only or args.init_new_head==False:
+        net.load_state_dict(torch.load(args.pretrain_model_path, map_location='cpu')['state_dict'])
+
+    if args.eval_only:
       run_config.data_provider.assign_active_img_size(image_size)
-    else:
-      net.classifier = LinearLayer(net.classifier.in_features, run_config.data_provider.n_classes, dropout_rate=args.dropout)
-      classification_head.append(net.classifier)
-      init_models(classification_head)
+      
   else:
     assert False
     if args.net_path is not None:
@@ -380,33 +409,61 @@ if __name__ == '__main__':
       net.blocks[0].mobile_inverted_conv.depth_conv.conv.weight.requires_grad = True
       net.blocks[0].mobile_inverted_conv.point_linear.conv.weight.requires_grad = True
   
+  from ofa.utils.layers import MBConvLayer, ZeroLayer
+  from CNN.model.modules import LiteResidualModule
   if args.trainable_blocks is not None and args.trainable_layers is not None:
-    if args.net == 'proxyless_mobile':
-      for layer_num in args.trainable_blocks:
-          if args.trainable_layers == 'first':
-            net.blocks[layer_num].conv.main_branch.inverted_bottleneck.conv.weight.requires_grad = True
-          elif args.trainable_layers == 'no_dw':
-            net.blocks[layer_num].conv.main_branch.inverted_bottleneck.conv.weight.requires_grad = True
-            net.blocks[layer_num].conv.main_branch.depth_conv.conv.weight.requires_grad = False
-            net.blocks[layer_num].conv.main_branch.point_linear.conv.weight.requires_grad = True
-          elif args.trainable_layers == 'all':
-            net.blocks[layer_num].conv.main_branch.inverted_bottleneck.conv.weight.requires_grad = True
-            net.blocks[layer_num].conv.main_branch.depth_conv.conv.weight.requires_grad = True
-            net.blocks[layer_num].conv.main_branch.point_linear.conv.weight.requires_grad = True
-    elif 'mcunet' in args.net:
-      for layer_num in args.trainable_blocks:
-        if args.trainable_layers == 'first':
-          net.blocks[layer_num].mobile_inverted_conv.inverted_bottleneck.conv.weight.requires_grad = True
-        elif args.trainable_layers == 'no_dw':
-          net.blocks[layer_num].mobile_inverted_conv.inverted_bottleneck.conv.weight.requires_grad = True
-          net.blocks[layer_num].mobile_inverted_conv.depth_conv.conv.weight.requires_grad = False
-          net.blocks[layer_num].mobile_inverted_conv.point_linear.conv.weight.requires_grad = True
-        elif args.trainable_layers == 'all':
-          net.blocks[layer_num].mobile_inverted_conv.inverted_bottleneck.conv.weight.requires_grad = True
-          net.blocks[layer_num].mobile_inverted_conv.depth_conv.conv.weight.requires_grad = True
-          net.blocks[layer_num].mobile_inverted_conv.point_linear.conv.weight.requires_grad = True
-    else:
-      raise NotImplementedError(f'not supported {args.net} for sparse training')
+    for layer_num in args.trainable_blocks:
+      block = net.blocks[layer_num]
+      if args.net == 'proxyless_mobile':
+        if isinstance(block.conv, MBConvLayer):
+          layer=block.conv
+        elif isinstance(block.conv, LiteResidualModule):
+          layer=block.conv.main_branch
+        elif isinstance(block.conv, ZeroLayer):
+          continue
+      elif 'mcunet' in args.net:
+        layer = block.mobile_inverted_conv
+      
+      if args.trainable_layers == 'first':
+        layer.inverted_bottleneck.conv.weight.requires_grad = True
+      elif args.trainable_layers == 'no_dw':
+        layer.inverted_bottleneck.conv.weight.requires_grad = True
+        layer.depth_conv.conv.weight.requires_grad = False
+        layer.point_linear.conv.weight.requires_grad = True
+      elif args.trainable_layers == 'all':
+        layer.inverted_bottleneck.conv.weight.requires_grad = True
+        layer.depth_conv.conv.weight.requires_grad = True
+        layer.point_linear.conv.weight.requires_grad = True
+      else:
+        raise NotImplementedError(f'not supported {args.net} for sparse training') 
+  
+  # if args.trainable_blocks is not None and args.trainable_layers is not None:
+  #   if args.net == 'proxyless_mobile':
+  #     for layer_num in args.trainable_blocks:
+  #         if args.trainable_layers == 'first':
+  #           net.blocks[layer_num].conv.main_branch.inverted_bottleneck.conv.weight.requires_grad = True
+  #         elif args.trainable_layers == 'no_dw':
+  #           net.blocks[layer_num].conv.main_branch.inverted_bottleneck.conv.weight.requires_grad = True
+  #           net.blocks[layer_num].conv.main_branch.depth_conv.conv.weight.requires_grad = False
+  #           net.blocks[layer_num].conv.main_branch.point_linear.conv.weight.requires_grad = True
+  #         elif args.trainable_layers == 'all':
+  #           net.blocks[layer_num].conv.main_branch.inverted_bottleneck.conv.weight.requires_grad = True
+  #           net.blocks[layer_num].conv.main_branch.depth_conv.conv.weight.requires_grad = True
+  #           net.blocks[layer_num].conv.main_branch.point_linear.conv.weight.requires_grad = True
+  #   elif 'mcunet' in args.net:
+  #     for layer_num in args.trainable_blocks:
+  #       if args.trainable_layers == 'first':
+  #         net.blocks[layer_num].mobile_inverted_conv.inverted_bottleneck.conv.weight.requires_grad = True
+  #       elif args.trainable_layers == 'no_dw':
+  #         net.blocks[layer_num].mobile_inverted_conv.inverted_bottleneck.conv.weight.requires_grad = True
+  #         net.blocks[layer_num].mobile_inverted_conv.depth_conv.conv.weight.requires_grad = False
+  #         net.blocks[layer_num].mobile_inverted_conv.point_linear.conv.weight.requires_grad = True
+  #       elif args.trainable_layers == 'all':
+  #         net.blocks[layer_num].mobile_inverted_conv.inverted_bottleneck.conv.weight.requires_grad = True
+  #         net.blocks[layer_num].mobile_inverted_conv.depth_conv.conv.weight.requires_grad = True
+  #         net.blocks[layer_num].mobile_inverted_conv.point_linear.conv.weight.requires_grad = True
+  #   else:
+  #     raise NotImplementedError(f'not supported {args.net} for sparse training')
 
   # weight quantization on frozen parameters
   if not args.resume and args.weight_quantization:

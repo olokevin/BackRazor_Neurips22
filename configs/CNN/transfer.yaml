@@ -1,51 +1,76 @@
+# project: transfer
+project: cifar10-cifar-10-c
+
 ##### dataset config #####
+# choices=[
+#     'aircraft', 'car', 'flowers102',
+#     'food101', 'cub200', 'pets',
+#     'cifar10', 'cifar100', 'ImageNet',
+#     'cifar10-c', 'ImageNet-c'])
+
 # dataset: car
-# # choices=[
-# #     'aircraft', 'car', 'flowers102',
-# #     'food101', 'cub200', 'pets',
-# #     'cifar10', 'cifar100', 'ImageNet',
-# #     'cifar10-c', 'ImageNet-c'])
+# init_lr: 0.0003
+# label_smoothing: 0.7
+
+# dataset: cifar10
+# init_lr: 0.00003
+# label_smoothing: 0.1
+
+# opt_type: adam
 # train_batch_size: 8
 # # train_batch_size: 1
 # n_epochs: 100
-# init_lr: 0.0003
-# opt_type: adam
 
-# dataset: cifar10-c
-# corruption_type: frost
-# # corruption_type: [frost,gaussian_blur,gaussian_noise,glass_blur,impulse_noise,jpeg_compression,motion_blur,pixelate,saturate,shot_noise,snow,spatter,speckle_noise,zoom_blur]
-# severity: 5
-# train_n: 1000
-# train_batch_size: 64
-# # train_batch_size: 1
-# n_epochs: 15
-# init_lr: 0.0001
-# opt_type: adam
-# init_new_head: false
-
-dataset: imagenet-c
-corruption_type: brightness
-# corruption_type: [brightness,contrast,defocus_blur,elastic_transform,fog,frost,gaussian_noise,glass_blur,impulse_noise,jpeg_compression,motion_blur,pixelate,shot_noise,snow,zoom_blur]
+dataset: cifar10-c
+init_new_head: true
+label_smoothing: 0
+corruption_type: gaussian_noise
+# corruption_type: [frost,gaussian_blur,gaussian_noise,glass_blur,impulse_noise,jpeg_compression,motion_blur,pixelate,saturate,shot_noise,snow,spatter,speckle_noise,zoom_blur]
 severity: 5
-train_n: 5000
+train_n: 1000
 # train_batch_size: 64
 train_batch_size: 1
-n_epochs: 10
-init_lr: 0.001
-opt_type: adam
-init_new_head: false
+valid_size: 100
+n_epochs: 20
+init_lr: 0.00001
+opt_type: sgd
+# from CIFAR-10 pretrian
+pretrain_model_path: '/home/zyq123/Project/Edge/BackRazor_Neurips22/exp/batch8/cifar10/mcunet-in1/last/20240721-184038-603275/checkpoint/model_best.pth.tar'
+# pretrain_model_path: '/home/zyq123/Project/Edge/BackRazor_Neurips22/exp/batch8/cifar10/mcunet-in1/full/20240721-183737-600430/checkpoint/model_best.pth.tar'
+
+# dataset: imagenet-c
+# init_new_head: false
+# label_smoothing: 0
+# corruption_type: brightness
+# # corruption_type: [brightness,contrast,defocus_blur,elastic_transform,fog,frost,gaussian_noise,glass_blur,impulse_noise,jpeg_compression,motion_blur,pixelate,shot_noise,snow,zoom_blur]
+# severity: 5
+# train_n: 5000
+# # train_batch_size: 64
+# train_batch_size: 1
+# valid_size: 10000
+# n_epochs: 10
+# # init_lr: 0.001
+# # opt_type: adam
+# init_lr: 0.0001
+# opt_type: sgd
 
 ##### RunConfig #####
-label_smoothing: 0
-validation_frequency: 10
+validation_frequency: 1
 
 ##### Network config #####
-net: proxyless_mobile
-origin_network: false
-weight_standardization: true
+# net: proxyless_mobile
+# image_size: 224
+# ### ws+gn
+# # origin_network: false
+# # weight_standardization: true
 
-# net: mcunet-in1
-# image_size: 128
+# ### bn
+# origin_network: true
+# weight_standardization: false
+# # replace_norm_layer: fuse_bn
+
+net: mcunet-in1
+image_size: 128
 # pretrain_model_path: '/home/zyq123/Project/Edge/BackRazor_Neurips22/assets/mcunet_in1@ws+gn.pth.tar'
 
 # net: mcunet-in2
@@ -67,9 +92,9 @@ weight_standardization: true
 # fix_bn_stat: true
 
 ###### origin_network: true, replace_norm_layer choices=[null, 'fuse_bn', 'fuse_bn_add_gn', 'replace_bn_with_insn']) ######
-# origin_network: true
-# replace_norm_layer: fuse_bn
-# weight_standardization: false
+origin_network: true
+replace_norm_layer: fuse_bn
+weight_standardization: false
 
 # origin_network: true
 # replace_norm_layer: fuse_bn_add_gn
@@ -89,14 +114,15 @@ weight_quantization: false
 # transfer_learning_method: 'full_noBN'
 # transfer_learning_method: 'bn+last'
 # transfer_learning_method: 'last'
-transfer_learning_method: 'bn_only'
-# transfer_learning_method: 'customize'
+# transfer_learning_method: 'bn_only'
+transfer_learning_method: 'customize'   # train selected layers below only
 
-# train_first_conv: true
+train_first_conv: true
 
 # trainable_blocks: [1,2]
+# trainable_blocks: [1,2,3,4,5,6]
 # trainable_blocks: [1,2,5,6]
-# trainable_blocks: [-2,-1]
+trainable_blocks: [-2,-1]
 # trainable_blocks: [-1,-4,-6,-7]
 # trainable_blocks: [-1,-2,-4,-5,-6,-7]
 # trainable_blocks: [-1,-2,-3,-4,-5,-6,-7,-8]

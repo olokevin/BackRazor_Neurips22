@@ -1,3 +1,5 @@
+project: 'default'
+
 path: null
 eval_only: false
 debug: false
@@ -11,6 +13,7 @@ dataset: flowers102
 #     'aircraft', 'car', 'flowers102',
 #     'food101', 'cub200', 'pets',
 #     'cifar10', 'cifar100', 'ImageNet',])
+init_new_head: true
 
 train_batch_size: 8
 test_batch_size: 100
@@ -43,7 +46,6 @@ grad_accumulation_steps: 1
 ### net config ###
 net: 'proxyless_mobile'
 # choices=['proxyless_mobile', 'resnet', 'mcunet'])
-init_new_head: true
 dropout: 0.2
 ws_eps: 0.00001
 net_path: null

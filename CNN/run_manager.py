@@ -30,6 +30,7 @@ from ofa.utils import (
 from ofa.utils import MyRandomResizedCrop
 
 from ZO_Estim.ZO_Estim_entry import build_obj_fn
+import wandb
 
 __all__ = ["RunManager"]
 
@@ -390,16 +391,35 @@ class RunManager:
                     loss_type = "%.1fkd+ce" % args.kd_ratio
 
                 if args.debug:
+                    from ofa.utils.layers import MBConvLayer, ZeroLayer
+                    from CNN.model.modules import LiteResidualModule
+                    layer_name_list = ['inverted_bottleneck', 'depth_conv', 'point_linear']
+
                     ##### Add hook to save input/output value & grad #####
                     hook_handle_list = []
-                    for block in self.network.blocks[1:]:
-                        layer = block.mobile_inverted_conv
-                        hook_handle_list.append(layer.inverted_bottleneck.register_forward_hook(fwd_hook_save_value))
-                        hook_handle_list.append(layer.inverted_bottleneck.register_full_backward_hook(bwd_hook_save_grad))
-                        hook_handle_list.append(layer.depth_conv.register_forward_hook(fwd_hook_save_value))
-                        hook_handle_list.append(layer.depth_conv.register_full_backward_hook(bwd_hook_save_grad))
-                        hook_handle_list.append(layer.point_linear.register_forward_hook(fwd_hook_save_value))
-                        hook_handle_list.append(layer.point_linear.register_full_backward_hook(bwd_hook_save_grad))
+                    hook_handle_list.append(self.network.first_conv.conv.register_forward_hook(fwd_hook_save_value))
+                    # hook_handle_list.append(self.network.first_conv.conv.register_full_backward_hook(bwd_hook_save_grad))
+                    for block in self.network.blocks:
+                        if args.net == 'proxyless_mobile':
+                            if isinstance(block.conv, MBConvLayer):
+                                layer=block.conv
+                            elif isinstance(block.conv, LiteResidualModule):
+                                layer=block.conv.main_branch
+                            elif isinstance(block.conv, ZeroLayer):
+                                continue
+                        elif 'mcunet' in args.net:
+                            layer = block.mobile_inverted_conv
+                        
+                        for layer_name in layer_name_list:
+                            conv_layer = getattr(layer, layer_name)
+                            if conv_layer is None:
+                                continue
+                            else:
+                                hook_handle_list.append(conv_layer.register_forward_hook(fwd_hook_save_value))
+                                # hook_handle_list.append(conv_layer.register_full_backward_hook(bwd_hook_save_grad))
+                        # if layer.inverted_bottleneck is not None:
+                        #     hook_handle_list.append(layer.inverted_bottleneck.register_forward_hook(fwd_hook_save_value))
+                        #     hook_handle_list.append(layer.inverted_bottleneck.register_full_backward_hook(bwd_hook_save_grad))
                 
                 if self.ZO_Estim is None:
                     # compute output
@@ -409,37 +429,6 @@ class RunManager:
                     # self.net.zero_grad()  # or self.optimizer.zero_grad()
                     loss.backward()
 
-                    if args.debug:
-                        ##### Residual gradient similarity #####
-                        last_block_out_grad = None
-                        cos_sim_log = ''
-                        block_idx_list = [-2, -3, -5, -6]
-                        for block_idx in block_idx_list:
-                            block_out_grad = self.network.blocks[block_idx].mobile_inverted_conv.point_linear.out_grad
-                            block_in_grad = self.network.blocks[block_idx-1].mobile_inverted_conv.point_linear.out_grad
-                            
-                            cos_sim = F.cosine_similarity(block_out_grad.view(-1), block_in_grad.view(-1), dim=0)
-                            cos_sim_log += f'block {block_idx}: {cos_sim}'
-                        
-                        self.write_log(cos_sim_log, prefix="cos_sim", should_print=False)
-
-                        ##### save input/output value & grad #####
-                        # block_idx = -2
-
-                        # pw1_w_grad = self.network.blocks[block_idx].mobile_inverted_conv.inverted_bottleneck.conv.weight.grad.data
-                        # pw1_in_grad = self.network.blocks[block_idx].mobile_inverted_conv.inverted_bottleneck.in_grad
-                        # pw1_out_grad = self.network.blocks[block_idx].mobile_inverted_conv.inverted_bottleneck.out_grad
-                      
-                        # pw1_in_value = self.network.blocks[block_idx].mobile_inverted_conv.inverted_bottleneck.in_value
-                        # pw1_out_value = self.network.blocks[block_idx].mobile_inverted_conv.inverted_bottleneck.out_value
-
-                        # dw_w = self.network.blocks[block_idx].mobile_inverted_conv.depth_conv.conv.weight.data
-                        # pw2_w = self.network.blocks[block_idx].mobile_inverted_conv.point_linear.conv.weight.data
-                        # dw_out_grad = self.network.blocks[block_idx].mobile_inverted_conv.depth_conv.out_grad
-                        # pw2_out_grad = self.network.blocks[block_idx].mobile_inverted_conv.point_linear.out_grad
-
-                        # torch.save((pw1_w_grad, pw1_in_grad, pw1_out_grad, pw1_in_value, pw1_out_value, dw_w, dw_out_grad, pw2_w, pw2_out_grad), f'./temp/debug_data_{block_idx}.pt')
-                    
                     """
                          grad_output sparsity
                     """
@@ -461,6 +450,77 @@ class RunManager:
                             
                     #         self.network.blocks[layer_num].mobile_inverted_conv.inverted_bottleneck.conv.weight.grad.data = pruned_pw1_grad_w
                     #         # print(layer_num)
+
+                    if args.debug:
+                        """
+                            Output Norm
+                        """
+                        # pw1_in_value = self.network.blocks[block_idx].mobile_inverted_conv.inverted_bottleneck.in_value
+                        # pw1_out_value = self.network.blocks[block_idx].mobile_inverted_conv.inverted_bottleneck.out_value
+
+                        log_dict = {
+                            f"first_conv/norm": torch.norm(self.network.first_conv.conv.weight),
+                            f"first_conv/max": torch.max(self.network.first_conv.conv.weight.abs()),
+                        }
+
+                        for block_idx, block in enumerate(self.network.blocks[0:2]):
+                            if args.net == 'proxyless_mobile':
+                                if isinstance(block.conv, MBConvLayer):
+                                    layer=block.conv
+                                elif isinstance(block.conv, LiteResidualModule):
+                                    layer=block.conv.main_branch
+                                elif isinstance(block.conv, ZeroLayer):
+                                    continue
+                            elif 'mcunet' in args.net:
+                                layer = block.mobile_inverted_conv
+                            
+                            for layer_name in layer_name_list:
+                                conv_layer = getattr(layer, layer_name)
+                                if conv_layer is None:
+                                    continue
+                                else:
+                                    log_dict.update({
+                                        f"block_{block_idx}/{layer_name}/w_norm": torch.norm(conv_layer.conv.weight),
+                                        f"block_{block_idx}/{layer_name}/w_max": torch.max(conv_layer.conv.weight.abs()),
+                                        f"block_{block_idx}/{layer_name}/out_norm": torch.norm(conv_layer.out_value),
+                                        f"block_{block_idx}/{layer_name}/out_max": torch.max(conv_layer.out_value.abs()),
+                                    })
+
+                        wandb.log(log_dict)
+                        """
+                            Residual gradient similarity
+                        """
+                        # last_block_out_grad = None
+                        # cos_sim_log = ''
+                        # block_idx_list = [-2, -3, -5, -6]
+                        # for block_idx in block_idx_list:
+                        #     block_out_grad = self.network.blocks[block_idx].mobile_inverted_conv.point_linear.out_grad
+                        #     block_in_grad = self.network.blocks[block_idx-1].mobile_inverted_conv.point_linear.out_grad
+                            
+                        #     cos_sim = F.cosine_similarity(block_out_grad.view(-1), block_in_grad.view(-1), dim=0)
+                        #     cos_sim_log += f'block {block_idx}: {cos_sim}'
+                        
+                        # self.write_log(cos_sim_log, prefix="cos_sim", should_print=False)
+
+                        ##### save input/output value & grad #####
+                        """
+                            save input/output value & grad (Explore activation sparsity)
+                        """
+                        # block_idx = -2
+
+                        # pw1_w_grad = self.network.blocks[block_idx].mobile_inverted_conv.inverted_bottleneck.conv.weight.grad.data
+                        # pw1_in_grad = self.network.blocks[block_idx].mobile_inverted_conv.inverted_bottleneck.in_grad
+                        # pw1_out_grad = self.network.blocks[block_idx].mobile_inverted_conv.inverted_bottleneck.out_grad
+                      
+                        # pw1_in_value = self.network.blocks[block_idx].mobile_inverted_conv.inverted_bottleneck.in_value
+                        # pw1_out_value = self.network.blocks[block_idx].mobile_inverted_conv.inverted_bottleneck.out_value
+
+                        # dw_w = self.network.blocks[block_idx].mobile_inverted_conv.depth_conv.conv.weight.data
+                        # pw2_w = self.network.blocks[block_idx].mobile_inverted_conv.point_linear.conv.weight.data
+                        # dw_out_grad = self.network.blocks[block_idx].mobile_inverted_conv.depth_conv.out_grad
+                        # pw2_out_grad = self.network.blocks[block_idx].mobile_inverted_conv.point_linear.out_grad
+
+                        # torch.save((pw1_w_grad, pw1_in_grad, pw1_out_grad, pw1_in_value, pw1_out_value, dw_w, dw_out_grad, pw2_w, pw2_out_grad), f'./temp/debug_data_{block_idx}.pt')
 
                 else:
                     ##### Test #####
@@ -550,6 +610,22 @@ class RunManager:
             train_loss, (train_top1, train_top5) = self.train_one_epoch(
                 args, epoch, warmup_epoch, warmup_lr
             )
+            train_log = "Train [{0}/{1}]\tloss {2:.3f}\t{4} {3:.3f}".format(
+                    epoch + 1 - warmup_epoch,
+                    self.run_config.n_epochs,
+                    np.mean(train_loss),
+                    np.mean(train_top1),
+                    self.get_metric_names()[0],
+                )
+            self.write_log(train_log, prefix="train", should_print=False)
+
+            train_log_dict = {
+                          f"train/epoch": epoch + 1 - warmup_epoch,
+                          f"train/loss": np.mean(train_loss),
+                          f"train/top1": np.mean(train_top1),
+                      }
+
+            wandb.log(train_log_dict)
 
             if (epoch + 1) % self.run_config.validation_frequency == 0:
                 img_size, val_loss, val_acc, val_acc5 = self.validate_all_resolution(
@@ -575,6 +651,14 @@ class RunManager:
                 for i_s, v_a in zip(img_size, val_acc):
                     val_log += "(%d, %.3f), " % (i_s, v_a)
                 self.write_log(val_log, prefix="valid", should_print=False)
+
+                val_log_dict = {
+                          f"val/epoch": epoch + 1 - warmup_epoch,
+                          f"val/loss": np.mean(val_loss),
+                          f"val/top1": np.mean(val_acc),
+                          f"val/best_top1": self.best_acc,
+                      }
+                wandb.log(val_log_dict)
             else:
                 is_best = False
 
@@ -587,6 +671,17 @@ class RunManager:
                 },
                 is_best=is_best,
             )
+        
+        best_path = os.path.join(self.save_path, "model_best.pth.tar")
+        checkpoint = torch.load(best_path, map_location="cpu")
+        if 'state_dict' in checkpoint:
+            checkpoint = checkpoint['state_dict']
+        self.network.load_state_dict(checkpoint)
+        test_loss, (test_top1, test_top5) = self.validate(epoch, is_test=True, net=self.network)
+        test_log = "Early stop best on best valid model. \tTest\tloss {0:.3f}\t{2} {1:.3f}".format(
+            np.mean(test_loss), np.mean(test_top1), self.get_metric_names()[0]
+        )
+        self.write_log(test_log, prefix="valid", should_print=False)
 
     def reset_running_statistics(
         self, net=None, subset_size=2000, subset_batch_size=200, data_loader=None

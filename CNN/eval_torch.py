@@ -75,12 +75,30 @@ def validate(model, val_loader):
 
     return val_top1.avg
 
+import sys
+sys.path.append(".")
+from CNN.utils import fuse_bn
 
 def main():
     model, resolution, description = build_model(args.net_id, pretrained=True)
     # model = model.to(device)
     model = model.cuda()
     model.eval()
+
+    ### Model quantization ###
+    
+    # fuse_bn(model)
+
+    # # set quantization config for server (x86)
+    # model.qconfig = torch.quantization.get_default_qconfig('fbgemm')
+
+    # # insert observers
+    # model = torch.quantization.prepare(model, inplace=True)
+    # # Calibrate the model and collect statistics
+
+    # # convert to quantized version
+    # model = torch.quantization.convert(model, inplace=True)
+
     val_loader = build_val_data_loader(resolution)
 
     # profile model
