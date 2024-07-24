@@ -408,6 +408,14 @@ if __name__ == '__main__':
     elif 'mcunet' in args.net:
       net.blocks[0].mobile_inverted_conv.depth_conv.conv.weight.requires_grad = True
       net.blocks[0].mobile_inverted_conv.point_linear.conv.weight.requires_grad = True
+
+    ### Add bias update
+    if args.net == 'proxyless_mobile':
+      net.blocks[0].conv.depth_conv.conv.bias.requires_grad = True
+      net.blocks[0].conv.point_linear.conv.bias.requires_grad = True
+    elif 'mcunet' in args.net:
+      net.blocks[0].mobile_inverted_conv.depth_conv.conv.bias.requires_grad = True
+      net.blocks[0].mobile_inverted_conv.point_linear.conv.bias.requires_grad = True
   
   from ofa.utils.layers import MBConvLayer, ZeroLayer
   from CNN.model.modules import LiteResidualModule
@@ -436,34 +444,20 @@ if __name__ == '__main__':
         layer.point_linear.conv.weight.requires_grad = True
       else:
         raise NotImplementedError(f'not supported {args.net} for sparse training') 
-  
-  # if args.trainable_blocks is not None and args.trainable_layers is not None:
-  #   if args.net == 'proxyless_mobile':
-  #     for layer_num in args.trainable_blocks:
-  #         if args.trainable_layers == 'first':
-  #           net.blocks[layer_num].conv.main_branch.inverted_bottleneck.conv.weight.requires_grad = True
-  #         elif args.trainable_layers == 'no_dw':
-  #           net.blocks[layer_num].conv.main_branch.inverted_bottleneck.conv.weight.requires_grad = True
-  #           net.blocks[layer_num].conv.main_branch.depth_conv.conv.weight.requires_grad = False
-  #           net.blocks[layer_num].conv.main_branch.point_linear.conv.weight.requires_grad = True
-  #         elif args.trainable_layers == 'all':
-  #           net.blocks[layer_num].conv.main_branch.inverted_bottleneck.conv.weight.requires_grad = True
-  #           net.blocks[layer_num].conv.main_branch.depth_conv.conv.weight.requires_grad = True
-  #           net.blocks[layer_num].conv.main_branch.point_linear.conv.weight.requires_grad = True
-  #   elif 'mcunet' in args.net:
-  #     for layer_num in args.trainable_blocks:
-  #       if args.trainable_layers == 'first':
-  #         net.blocks[layer_num].mobile_inverted_conv.inverted_bottleneck.conv.weight.requires_grad = True
-  #       elif args.trainable_layers == 'no_dw':
-  #         net.blocks[layer_num].mobile_inverted_conv.inverted_bottleneck.conv.weight.requires_grad = True
-  #         net.blocks[layer_num].mobile_inverted_conv.depth_conv.conv.weight.requires_grad = False
-  #         net.blocks[layer_num].mobile_inverted_conv.point_linear.conv.weight.requires_grad = True
-  #       elif args.trainable_layers == 'all':
-  #         net.blocks[layer_num].mobile_inverted_conv.inverted_bottleneck.conv.weight.requires_grad = True
-  #         net.blocks[layer_num].mobile_inverted_conv.depth_conv.conv.weight.requires_grad = True
-  #         net.blocks[layer_num].mobile_inverted_conv.point_linear.conv.weight.requires_grad = True
-  #   else:
-  #     raise NotImplementedError(f'not supported {args.net} for sparse training')
+      
+      ### Add bias update
+      if args.trainable_layers == 'first':
+        layer.inverted_bottleneck.conv.bias.requires_grad = True
+      elif args.trainable_layers == 'no_dw':
+        layer.inverted_bottleneck.conv.bias.requires_grad = True
+        layer.depth_conv.conv.bias.requires_grad = False
+        layer.point_linear.conv.bias.requires_grad = True
+      elif args.trainable_layers == 'all':
+        layer.inverted_bottleneck.conv.bias.requires_grad = True
+        layer.depth_conv.conv.bias.requires_grad = True
+        layer.point_linear.conv.bias.requires_grad = True
+      else:
+        raise NotImplementedError(f'not supported {args.net} for sparse training') 
 
   # weight quantization on frozen parameters
   if not args.resume and args.weight_quantization:
