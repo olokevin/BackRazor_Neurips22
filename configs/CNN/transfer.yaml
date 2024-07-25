@@ -35,7 +35,8 @@ n_epochs: 20
 init_lr: 0.00001
 opt_type: sgd
 # from CIFAR-10 pretrian
-pretrain_model_path: '/home/zyq123/Project/Edge/BackRazor_Neurips22/exp/batch8/cifar10/mcunet-in1/last/20240721-184038-603275/checkpoint/model_best.pth.tar'
+pretrain_model_path: './assets/mcunet_in1_cifar10.pth.tar'
+# pretrain_model_path: '/home/zyq123/Project/Edge/BackRazor_Neurips22/exp/batch8/cifar10/mcunet-in1/last/20240721-184038-603275/checkpoint/model_best.pth.tar'
 # pretrain_model_path: '/home/zyq123/Project/Edge/BackRazor_Neurips22/exp/batch8/cifar10/mcunet-in1/full/20240721-183737-600430/checkpoint/model_best.pth.tar'
 
 # dataset: imagenet-c
@@ -117,7 +118,7 @@ weight_quantization: false
 # transfer_learning_method: 'bn_only'
 transfer_learning_method: 'customize'   # train selected layers below only
 
-train_first_conv: true
+# train_first_conv: true
 
 trainable_blocks: [1,2]
 # trainable_blocks: [1,2,3,4,5,6]

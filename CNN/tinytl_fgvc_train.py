@@ -420,6 +420,9 @@ if __name__ == '__main__':
   from ofa.utils.layers import MBConvLayer, ZeroLayer
   from CNN.model.modules import LiteResidualModule
   if args.trainable_blocks is not None and args.trainable_layers is not None:
+    if type(args.trainable_blocks) is str:
+      import ast
+      args.trainable_blocks = ast.literal_eval(args.trainable_blocks)
     for layer_num in args.trainable_blocks:
       block = net.blocks[layer_num]
       if args.net == 'proxyless_mobile':
