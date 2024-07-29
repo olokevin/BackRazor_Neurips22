@@ -6,6 +6,7 @@ import os
 import random
 import time
 import json
+import math
 import numpy as np
 import torch.nn as nn
 import torch.nn.functional as F
@@ -397,8 +398,8 @@ class RunManager:
 
                     ##### Add hook to save input/output value & grad #####
                     hook_handle_list = []
-                    hook_handle_list.append(self.network.first_conv.conv.register_forward_hook(fwd_hook_save_value))
-                    # hook_handle_list.append(self.network.first_conv.conv.register_full_backward_hook(bwd_hook_save_grad))
+                    hook_handle_list.append(self.network.first_conv.register_forward_hook(fwd_hook_save_value))
+                    # hook_handle_list.append(self.network.first_conv.register_full_backward_hook(bwd_hook_save_grad))
                     for block in self.network.blocks:
                         if args.net == 'proxyless_mobile':
                             if isinstance(block.conv, MBConvLayer):
@@ -416,10 +417,7 @@ class RunManager:
                                 continue
                             else:
                                 hook_handle_list.append(conv_layer.register_forward_hook(fwd_hook_save_value))
-                                # hook_handle_list.append(conv_layer.register_full_backward_hook(bwd_hook_save_grad))
-                        # if layer.inverted_bottleneck is not None:
-                        #     hook_handle_list.append(layer.inverted_bottleneck.register_forward_hook(fwd_hook_save_value))
-                        #     hook_handle_list.append(layer.inverted_bottleneck.register_full_backward_hook(bwd_hook_save_grad))
+                                hook_handle_list.append(conv_layer.register_full_backward_hook(bwd_hook_save_grad))
                 
                 if self.ZO_Estim is None:
                     # compute output
@@ -452,41 +450,42 @@ class RunManager:
                     #         # print(layer_num)
 
                     if args.debug:
+                        
                         """
                             Output Norm
                         """
                         # pw1_in_value = self.network.blocks[block_idx].mobile_inverted_conv.inverted_bottleneck.in_value
                         # pw1_out_value = self.network.blocks[block_idx].mobile_inverted_conv.inverted_bottleneck.out_value
 
-                        log_dict = {
-                            f"first_conv/norm": torch.norm(self.network.first_conv.conv.weight),
-                            f"first_conv/max": torch.max(self.network.first_conv.conv.weight.abs()),
-                        }
+                        # log_dict = {
+                        #     f"first_conv/norm": torch.norm(self.network.first_conv.conv.weight),
+                        #     f"first_conv/max": torch.max(self.network.first_conv.conv.weight.abs()),
+                        # }
 
-                        for block_idx, block in enumerate(self.network.blocks[0:2]):
-                            if args.net == 'proxyless_mobile':
-                                if isinstance(block.conv, MBConvLayer):
-                                    layer=block.conv
-                                elif isinstance(block.conv, LiteResidualModule):
-                                    layer=block.conv.main_branch
-                                elif isinstance(block.conv, ZeroLayer):
-                                    continue
-                            elif 'mcunet' in args.net:
-                                layer = block.mobile_inverted_conv
+                        # for block_idx, block in enumerate(self.network.blocks[0:2]):
+                        #     if args.net == 'proxyless_mobile':
+                        #         if isinstance(block.conv, MBConvLayer):
+                        #             layer=block.conv
+                        #         elif isinstance(block.conv, LiteResidualModule):
+                        #             layer=block.conv.main_branch
+                        #         elif isinstance(block.conv, ZeroLayer):
+                        #             continue
+                        #     elif 'mcunet' in args.net:
+                        #         layer = block.mobile_inverted_conv
                             
-                            for layer_name in layer_name_list:
-                                conv_layer = getattr(layer, layer_name)
-                                if conv_layer is None:
-                                    continue
-                                else:
-                                    log_dict.update({
-                                        f"block_{block_idx}/{layer_name}/w_norm": torch.norm(conv_layer.conv.weight),
-                                        f"block_{block_idx}/{layer_name}/w_max": torch.max(conv_layer.conv.weight.abs()),
-                                        f"block_{block_idx}/{layer_name}/out_norm": torch.norm(conv_layer.out_value),
-                                        f"block_{block_idx}/{layer_name}/out_max": torch.max(conv_layer.out_value.abs()),
-                                    })
+                        #     for layer_name in layer_name_list:
+                        #         conv_layer = getattr(layer, layer_name)
+                        #         if conv_layer is None:
+                        #             continue
+                        #         else:
+                        #             log_dict.update({
+                        #                 f"block_{block_idx}/{layer_name}/w_norm": torch.norm(conv_layer.conv.weight),
+                        #                 f"block_{block_idx}/{layer_name}/w_max": torch.max(conv_layer.conv.weight.abs()),
+                        #                 f"block_{block_idx}/{layer_name}/out_norm": torch.norm(conv_layer.out_value),
+                        #                 f"block_{block_idx}/{layer_name}/out_max": torch.max(conv_layer.out_value.abs()),
+                        #             })
 
-                        wandb.log(log_dict)
+                        # wandb.log(log_dict)
                         """
                             Residual gradient similarity
                         """
@@ -525,24 +524,28 @@ class RunManager:
                 else:
                     ##### Test #####
                     if args.debug:
-                        output = self.net(images)
-                        loss = self.train_criterion(output, labels)
-                        loss.backward()  
+                        """
+                            Monte Carlo test
+                        """
+                        # output = self.net(images)
+                        # FO_loss = self.train_criterion(output, labels)
+                        # FO_loss.backward()  
 
-                        ##### Save FO gradient
-                        try:
-                            block_idx = args.ZO_Estim.param_perturb_block_idx_list[-1]
-                        except:
-                            try:
-                                block_idx = args.ZO_Estim.actv_perturb_block_idx_list[-1]
-                            except:
-                                block_idx = -1
+                        # ##### Save FO gradient
+                        # try:
+                        #     block_idx = args.ZO_Estim.param_perturb_block_idx_list[-1]
+                        # except:
+                        #     try:
+                        #         block_idx = args.ZO_Estim.actv_perturb_block_idx_list[-1]
+                        #     except:
+                        #         block_idx = -1
                         
-                        from ZO_Estim.ZO_utils import SplitedLayer
-                        splited_layer = SplitedLayer(idx=block_idx, name=f'blocks.{block_idx}.adapter_mlp', layer=self.network.blocks[block_idx].mobile_inverted_conv.inverted_bottleneck.conv)
+                        # from ZO_Estim.ZO_utils import SplitedLayer
+                        # splited_layer = SplitedLayer(idx=block_idx, name=f'blocks.{block_idx}.adapter_mlp', layer=self.network.blocks[block_idx].mobile_inverted_conv.inverted_bottleneck.conv)
 
-                        # FO_grad = splited_layer.layer.out_grad[0].data
-                        FO_adapter_up_grad_w = splited_layer.layer.weight.grad.data
+                        # # FO_grad = splited_layer.layer.out_grad[0].data
+                        # FO_adapter_up_grad_w = splited_layer.layer.weight.grad.data
+                        pass
 
                     ##### ZO gradient Estimation #####
                     obj_fn_type = self.ZO_Estim.obj_fn_type
@@ -557,21 +560,57 @@ class RunManager:
                         output, loss = self.ZO_Estim.estimate_grad()
                     
                     if args.debug:
-                        # ZO_grad = splited_layer.layer.out_grad[0].data
-                        ZO_adapter_up_grad_w = splited_layer.layer.weight.grad.data
+                        """
+                            Monte Carlo test
+                        """
+                        # # ZO_grad = splited_layer.layer.out_grad[0].data
+                        # ZO_adapter_up_grad_w = splited_layer.layer.weight.grad.data
 
-                        # print('\n Grad output')
-                        # print('cos sim grad_output', F.cosine_similarity(FO_grad.view(-1), ZO_grad.view(-1), dim=0))
-                        # print('FO_grad:', torch.linalg.norm(FO_grad))
-                        # print('ZO_grad:', torch.linalg.norm(ZO_grad))
+                        # # print('\n Grad output')
+                        # # print('cos sim grad_output', F.cosine_similarity(FO_grad.view(-1), ZO_grad.view(-1), dim=0))
+                        # # print('FO_grad:', torch.linalg.norm(FO_grad))
+                        # # print('ZO_grad:', torch.linalg.norm(ZO_grad))
 
-                        print('Adapter_up')
-                        print(f'weight cos sim {F.cosine_similarity(FO_adapter_up_grad_w.view(-1), ZO_adapter_up_grad_w.view(-1), dim=0)}')
-                        print(f'FO_weight_grad norm: {torch.linalg.norm(FO_adapter_up_grad_w)}')
-                        print(f'ZO_weight_grad norm: {torch.linalg.norm(ZO_adapter_up_grad_w)}')
-                        print(f'ZO/FO:  {torch.linalg.norm(ZO_adapter_up_grad_w)/torch.linalg.norm(FO_adapter_up_grad_w)}')
+                        # print(f'weight cos sim {F.cosine_similarity(FO_adapter_up_grad_w.view(-1), ZO_adapter_up_grad_w.view(-1), dim=0)}')
+                        # print(f'FO_weight_grad norm: {torch.linalg.norm(FO_adapter_up_grad_w)}')
+                        # print(f'ZO_weight_grad norm: {torch.linalg.norm(ZO_adapter_up_grad_w)}')
+                        # print(f'ZO/FO:  {torch.linalg.norm(ZO_adapter_up_grad_w)/torch.linalg.norm(FO_adapter_up_grad_w)}')
+                        pass
 
                 if args.debug:
+                    """
+                        Gradient Norm
+                    """
+                    log_dict = {}
+                    for block_idx, block in enumerate(self.network.blocks):
+                        if args.net == 'proxyless_mobile':
+                            if isinstance(block.conv, MBConvLayer):
+                                layer=block.conv
+                            elif isinstance(block.conv, LiteResidualModule):
+                                layer=block.conv.main_branch
+                            elif isinstance(block.conv, ZeroLayer):
+                                continue
+                        elif 'mcunet' in args.net:
+                            layer = block.mobile_inverted_conv
+                        
+                        for layer_name in layer_name_list:
+                            conv_layer = getattr(layer, layer_name)
+                            if conv_layer is None:
+                                continue
+                            else:
+                                # ZO_scale = 1
+                                ZO_scale = math.sqrt(self.ZO_Estim.n_sample / (self.ZO_Estim.n_sample + conv_layer.conv.weight.numel() + 1))
+                                log_dict.update({
+                                    # f"block_{block_idx}/{layer_name}/grad_w_norm": ZO_scale*torch.norm(conv_layer.conv.weight.grad),
+                                    # f"block_{block_idx}/{layer_name}/grad_w_norm": ZO_scale*torch.norm(conv_layer.conv.weight.grad) / math.sqrt(conv_layer.conv.weight.numel()),
+                                    # f"block_{block_idx}/{layer_name}/grad_w_norm": ZO_scale*torch.norm(conv_layer.conv.weight.grad) / torch.norm(conv_layer.conv.weight),
+                                    f"block_{block_idx}/{layer_name}/grad_w_norm": ZO_scale*torch.norm(conv_layer.conv.weight.grad) / torch.norm(conv_layer.conv.weight) / math.sqrt(conv_layer.conv.weight.numel()),
+                                    # f"block_{block_idx}/{layer_name}/grad_a_norm": torch.norm(conv_layer.out_grad),
+                                })
+                    for key, value in log_dict.items():
+                        print(f'{value}')
+                    
+                    print('done')
                     ##### Remove hook #####
                     for hook_handle in hook_handle_list:
                         hook_handle.remove()

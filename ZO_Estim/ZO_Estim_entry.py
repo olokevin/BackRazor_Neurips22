@@ -44,7 +44,7 @@ def build_ZO_Estim(config, model):
                 if block_idx < 0:
                     block_idx = len(split_modules_list) + block_idx
                 block = split_modules_list[block_idx]
-                for name, param in model.named_parameters():
+                for name, param in block.named_parameters():
                     if any(keyword in name for keyword in param_perturb_param_list):
                         splited_param_list.append(SplitedParam(idx=block_idx, name=name, param=param))
         
