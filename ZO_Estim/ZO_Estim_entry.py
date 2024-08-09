@@ -5,7 +5,7 @@ from .ZO_utils import SplitedLayer, SplitedParam, split_model
 from .ZO_Estim_MC import ZO_Estim_MC
 
 ### Model specific utils ###
-from .ZO_proxylessnas_utils import opt_able_layers_dict, get_iterable_block_name, pre_block_forward, post_block_forward
+from .ZO_fwd_utils import opt_able_layers_dict, get_iterable_block_name, pre_block_forward, post_block_forward
 
 def create_opt_layer_list(layer_list, opt_able_layers_dict):
     if isinstance(layer_list, str):
