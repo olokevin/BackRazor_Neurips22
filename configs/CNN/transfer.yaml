@@ -1,5 +1,5 @@
 # project: transfer
-project: cifar10-cifar-10-c
+# project: cifar10-cifar-10-c
 
 ##### dataset config #####
 # choices=[
@@ -28,11 +28,13 @@ corruption_type: gaussian_noise
 # corruption_type: [frost,gaussian_blur,gaussian_noise,glass_blur,impulse_noise,jpeg_compression,motion_blur,pixelate,saturate,shot_noise,snow,spatter,speckle_noise,zoom_blur]
 severity: 5
 train_n: 1000
-# train_batch_size: 64
-train_batch_size: 1
+train_batch_size: 100
+init_lr: 0.001
+# train_batch_size: 1
+# init_lr: 0.00001
 valid_size: 100
-n_epochs: 20
-init_lr: 0.00001
+n_epochs: 50
+
 opt_type: sgd
 # from CIFAR-10 pretrian
 pretrain_model_path: './assets/mcunet_in1_cifar10.pth.tar'
@@ -136,7 +138,7 @@ transfer_learning_method: 'full'
 ##### Zeroth-Order config #####
 ZO_Estim:
   ####### ZO_Estim_MC #######
-  en: True
+  # en: True
   name: ZO_Estim_MC
   sigma: 0.01
   n_sample: 1
