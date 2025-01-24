@@ -1,6 +1,7 @@
 import os
 import torchvision
 from ofa.imagenet_classification.data_providers import ImagenetDataProvider
+import pyvww
 
 __all__ = [
   'FGVCDataProvider',
@@ -177,7 +178,7 @@ class CIFAR10DataProvider(FGVCDataProvider):
     return dataset
 
 
-class CIFAR100DataProvider(CIFAR10DataProvider):
+class CIFAR100DataProvider(FGVCDataProvider):
 
   @staticmethod
   def name():
@@ -197,6 +198,30 @@ class CIFAR100DataProvider(CIFAR10DataProvider):
 
   def test_dataset(self, _transforms):
     dataset = torchvision.datasets.CIFAR100(self.save_path, train=False, transform=_transforms, download=True)
+    return dataset
+
+class VWWDataProvider(FGVCDataProvider):
+
+  @staticmethod
+  def name():
+    return 'visualwakewords'
+
+  @property
+  def n_classes(self):
+    return 2
+
+  @property
+  def save_path(self):
+    return os.path.expanduser('~/dataset/cifar100')
+
+  def train_dataset(self, _transforms):
+    dataset = pyvww.pytorch.VisualWakeWordsClassification(root=os.path.join(os.path.expanduser("~"), "dataset/vww/train2014"), 
+                    annFile=os.path.join(os.path.expanduser("~"), "dataset/vww/annotations/person_keypoints_train2014.json"), transform=_transforms,)
+    return dataset
+
+  def test_dataset(self, _transforms):
+    dataset = pyvww.pytorch.VisualWakeWordsClassification(root=os.path.join(os.path.expanduser("~"), "dataset/vww/val2014"), 
+                    annFile=os.path.join(os.path.expanduser("~"), "dataset/vww/annotations/person_keypoints_val2014.json"), transform=_transforms,)
     return dataset
 
 class ImageNetDataProvider(FGVCDataProvider):
