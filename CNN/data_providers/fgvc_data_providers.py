@@ -6,7 +6,7 @@ import pyvww
 __all__ = [
   'FGVCDataProvider',
   'AircraftDataProvider', 'CarDataProvider', 'Flowers102DataProvider', 'CUB200DataProvider', 'PetsDataProvider',
-  'Food101DataProvider', 'CIFAR10DataProvider', 'CIFAR100DataProvider', 'ImageNet_C_DataProvider'
+  'Food101DataProvider', 'CIFAR10DataProvider', 'CIFAR100DataProvider', 'VWWDataProvider', 'CIFAR10_C_DataProvider', 'ImageNet_C_DataProvider'
 ]
 
 

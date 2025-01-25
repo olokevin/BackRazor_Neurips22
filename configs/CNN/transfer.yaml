@@ -16,29 +16,32 @@
 # init_lr: 0.00003
 # label_smoothing: 0.1
 
-# opt_type: adam
-# # train_batch_size: 8
-# train_batch_size: 1
-# n_epochs: 100
-
-dataset: cifar10-c
-init_new_head: true
-label_smoothing: 0
-corruption_type: gaussian_noise
-# corruption_type: [frost,gaussian_blur,gaussian_noise,glass_blur,impulse_noise,jpeg_compression,motion_blur,pixelate,saturate,shot_noise,snow,spatter,speckle_noise,zoom_blur]
-severity: 5
-train_n: 1000
-train_batch_size: 100
-init_lr: 0.001
-# train_batch_size: 1
-# init_lr: 0.00001
-valid_size: 100
-n_epochs: 50
+dataset: visualwakewords
+init_lr: 0.0003
 
 opt_type: sgd
-# from CIFAR-10 pretrian
-pretrain_model_path: './assets/mcunet_in1_cifar10.pth.tar'
-# pretrain_model_path: '/home/zyq123/Project/Edge/BackRazor_Neurips22/exp/batch8/cifar10/mcunet-in1/full/20240721-183737-600430/checkpoint/model_best.pth.tar'
+# train_batch_size: 8
+train_batch_size: 128
+n_epochs: 100
+
+# dataset: cifar10-c
+# init_new_head: true
+# label_smoothing: 0
+# corruption_type: gaussian_noise
+# # corruption_type: [frost,gaussian_blur,gaussian_noise,glass_blur,impulse_noise,jpeg_compression,motion_blur,pixelate,saturate,shot_noise,snow,spatter,speckle_noise,zoom_blur]
+# severity: 5
+# train_n: 1000
+# train_batch_size: 100
+# init_lr: 0.001
+# # train_batch_size: 1
+# # init_lr: 0.00001
+# valid_size: 100
+# n_epochs: 50
+
+# opt_type: sgd
+# # from CIFAR-10 pretrian
+# pretrain_model_path: './assets/mcunet_in1_cifar10.pth.tar'
+# # pretrain_model_path: '/home/zyq123/Project/Edge/BackRazor_Neurips22/exp/batch8/cifar10/mcunet-in1/full/20240721-183737-600430/checkpoint/model_best.pth.tar'
 
 # dataset: imagenet-c
 # init_new_head: false

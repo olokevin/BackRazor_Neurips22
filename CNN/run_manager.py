@@ -230,6 +230,9 @@ class RunManager:
         acc1, acc5 = accuracy(output, labels, topk=(1, 5))
         metric_dict["top1"].update(acc1[0].item(), output.size(0))
         metric_dict["top5"].update(acc5[0].item(), output.size(0))
+        # acc1, acc5 = accuracy(output, labels, topk=(1, 1))
+        # metric_dict["top1"].update(acc1[0].item(), output.size(0))
+        # metric_dict["top5"].update(acc5[0].item(), output.size(0))
 
     def get_metric_vals(self, metric_dict, return_dict=False):
         if return_dict:

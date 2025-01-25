@@ -2,7 +2,7 @@ from ofa.imagenet_classification.run_manager import ImagenetRunConfig
 
 from .fgvc_data_providers import AircraftDataProvider, Flowers102DataProvider, CarDataProvider
 from .fgvc_data_providers import Food101DataProvider, CUB200DataProvider, PetsDataProvider
-from .fgvc_data_providers import CIFAR10DataProvider, CIFAR100DataProvider, ImageNetDataProvider, CIFAR10_C_DataProvider, ImageNet_C_DataProvider
+from .fgvc_data_providers import CIFAR10DataProvider, CIFAR100DataProvider, ImageNetDataProvider, VWWDataProvider, CIFAR10_C_DataProvider, ImageNet_C_DataProvider
 
 __all__ = ['FGVCRunConfig']
 
@@ -69,6 +69,8 @@ class FGVCRunConfig(ImagenetRunConfig):
                     DataProviderClass = CIFAR100DataProvider
                 elif self.dataset == ImageNetDataProvider.name():
                     DataProviderClass = ImageNetDataProvider
+                elif self.dataset == VWWDataProvider.name():
+                    DataProviderClass = VWWDataProvider
                 
                 else:
                     raise ValueError('Do not support: %s' % self.dataset)
